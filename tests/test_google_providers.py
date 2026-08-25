@@ -206,6 +206,39 @@ async def test_google_routes_permission_error_is_actionable_and_key_safe() -> No
     assert "secret" not in repr(caught.value)
 
 
+@pytest.mark.parametrize(
+    "elements, message",
+    [
+        ([], "incomplete matrix"),
+        (
+            [
+                {
+                    "originIndex": 0,
+                    "destinationIndex": 0,
+                    "condition": "ROUTE_NOT_FOUND",
+                },
+                {
+                    "originIndex": 0,
+                    "destinationIndex": 0,
+                    "condition": "ROUTE_NOT_FOUND",
+                },
+            ],
+            "invalid matrix element",
+        ),
+    ],
+)
+async def test_google_routes_rejects_missing_or_duplicate_elements(elements, message) -> None:
+    def handle(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=elements)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        with pytest.raises(TravelDataError, match=message):
+            await GoogleRoutesMatrix("secret", client).route_matrix(
+                (Coordinate(51, -1),),
+                (Coordinate(52, -2),),
+            )
+
+
 async def test_google_routes_rejects_non_finite_distance() -> None:
     def handle(request: httpx.Request) -> httpx.Response:
         return httpx.Response(

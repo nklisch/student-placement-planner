@@ -163,6 +163,7 @@ class GoogleRoutesMatrix:
 
         distances: list[list[int | None]] = [[None] * len(destinations) for _ in origins]
         durations: list[list[int | None]] = [[None] * len(destinations) for _ in origins]
+        seen: set[tuple[int, int]] = set()
         for element in elements:
             try:
                 origin_index = int(element["originIndex"])
@@ -171,6 +172,15 @@ class GoogleRoutesMatrix:
                     0 <= destination_index < len(destinations)
                 ):
                     raise ValueError
+                cell = (origin_index, destination_index)
+                if cell in seen:
+                    raise ValueError
+                seen.add(cell)
+                status = element.get("status")
+                if isinstance(status, dict) and status.get("code", 0) not in (0, "0", None):
+                    raise TravelDataError(
+                        "Google Routes couldn't calculate one or more route pairs"
+                    )
                 if element.get("condition") != "ROUTE_EXISTS":
                     continue
                 distances[origin_index][destination_index] = _nonnegative_finite_int(
@@ -179,8 +189,12 @@ class GoogleRoutesMatrix:
                 durations[origin_index][destination_index] = _parse_duration(
                     element.get("duration")
                 )
+            except TravelDataError:
+                raise
             except (KeyError, TypeError, ValueError) as error:
                 raise TravelDataError("Google Routes returned an invalid matrix element") from error
+        if len(seen) != len(origins) * len(destinations):
+            raise TravelDataError("Google Routes returned an incomplete matrix")
         return distances, durations
 
     async def _retry_route_request(

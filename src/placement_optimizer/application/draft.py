@@ -320,6 +320,8 @@ class DraftSession:
                 self.manual_times[cell] = cleaned
             else:
                 self.manual_times.pop(cell, None)
+            if self.calculated_matrix is not None:
+                self._calculated_travel_version = -1
             self._bump()
 
     def set_manual_distance(
@@ -337,6 +339,8 @@ class DraftSession:
                 self.manual_distances_meters.pop(cell, None)
             else:
                 self.manual_distances_meters[cell] = distance_meters
+            if self.calculated_matrix is not None:
+                self._calculated_travel_version = -1
             self._bump()
 
     def grid_snapshot(self) -> DraftGridSnapshot:
@@ -601,7 +605,9 @@ class DraftSession:
                     matrix.distances_meters[student_index]
                 ):
                     distance = matrix.distances_meters[student_index][location_index]
-                    if distance is not None:
+                    if distance is None:
+                        self.manual_distances_meters.pop(key, None)
+                    else:
                         self.manual_distances_meters[key] = distance
 
     def _bump(self, *, model: bool = True, travel: bool = False) -> None:

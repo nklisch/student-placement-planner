@@ -206,6 +206,51 @@ def test_calculated_matrix_must_match_selected_provider_mode() -> None:
     assert not session.calculated_travel_is_stale
 
 
+def test_manual_override_marks_provider_matrix_stale_and_recalculation_clears_old_distance() -> (
+    None
+):
+    session = ready_session()
+    original = session.build_project().project.travel_matrix
+    session.set_travel_mode(TravelMode.GOOGLE)
+    session.set_calculated_matrix(
+        TravelMatrix(
+            ((1000, 2000), (3000, 4000)),
+            original.durations_seconds,
+            "google_routes",
+        )
+    )
+
+    session.set_manual_time("student-a", "location-a", "6")
+    assert session.calculated_travel_is_stale
+
+    session.set_calculated_matrix(
+        TravelMatrix(
+            ((None, 2000), (3000, 4000)),
+            original.durations_seconds,
+            "google_routes",
+        )
+    )
+    assert ("student-a", "location-a") not in session.manual_distances_meters
+
+
+def test_stale_wrong_sized_provider_matrix_does_not_break_draft_reopen(tmp_path) -> None:
+    session = ready_session()
+    original = session.build_project().project.travel_matrix
+    session.set_travel_mode(TravelMode.GOOGLE)
+    session.set_calculated_matrix(
+        TravelMatrix(original.distances_meters, original.durations_seconds, "google_routes")
+    )
+    session.add_student(StudentDraft("student-c", "Cara", "s3"))
+    path = tmp_path / "stale-provider.spp"
+
+    save_draft_session(session, path)
+    restored = load_draft_session(path)
+
+    assert len(restored.students) == 3
+    assert restored.calculated_matrix is None
+    assert restored.manual_times["student-a", "location-a"] == "5"
+
+
 def test_project_round_trip_populates_editable_manual_grid() -> None:
     original = ready_session().build_project().project
     assert original is not None

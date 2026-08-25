@@ -10,7 +10,12 @@ from PySide6.QtWidgets import QLabel
 
 from placement_optimizer.application import TravelMode
 from placement_optimizer.domain import Coordinate
-from placement_optimizer.travel import ResolvedPlace, TravelCoordinateReview, TravelMatrix
+from placement_optimizer.travel import (
+    ResolvedPlace,
+    TravelCoordinateReview,
+    TravelDataError,
+    TravelMatrix,
+)
 from placement_optimizer.ui.pages import travel as travel_module
 
 
@@ -166,6 +171,26 @@ def test_offline_mode_reviews_then_calculates(window, qtbot, fill_small, monkeyp
     assert workflow.calls == ["review-offline", "calculate-offline"]
     assert window.controller.session.calculated_matrix.source.startswith("valhalla:")
     assert window.controller.session.readiness().travel_ready
+
+
+def test_provider_failure_keeps_address_out_of_troubleshooting_details(
+    window, qtbot, fill_small
+) -> None:
+    fill_small(window.controller)
+    page = window.pages[3]
+
+    class FailingWorkflow(_Workflow):
+        async def review_google(self, _travel_input, _key: str):
+            raise TravelDataError("address was not found: 123 Private Home")
+
+    page._workflow = FailingWorkflow()
+    page.online_card.select()
+    page.google_key.setText("test-key")
+    page._review_addresses(TravelMode.GOOGLE)
+
+    qtbot.waitUntil(lambda: page._provider_worker is None, timeout=5000)
+    assert "123 Private Home" in page.google_message.text()
+    assert "123 Private Home" not in window._last_detail
 
 
 def test_provider_result_is_discarded_when_addresses_change_mid_operation(

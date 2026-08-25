@@ -313,6 +313,16 @@ def _to_document(project: PlacementProject) -> dict[str, object]:
 
 
 def _draft_to_document(session: DraftSession) -> dict[str, object]:
+    matrix = session.calculated_matrix
+    if matrix is not None and (
+        len(matrix.durations_seconds) != len(session.students)
+        or len(matrix.distances_meters) != len(session.students)
+        or any(len(row) != len(session.locations) for row in matrix.durations_seconds)
+        or any(len(row) != len(session.locations) for row in matrix.distances_meters)
+    ):
+        # Structural roster edits leave keyed manual cells intact, but the old
+        # positional provider matrix cannot be safely associated with new rows.
+        matrix = None
     return {
         "schema_version": _SCHEMA_VERSION,
         "document_kind": "draft",
@@ -356,14 +366,16 @@ def _draft_to_document(session: DraftSession) -> dict[str, object]:
         ],
         "calculated_matrix": (
             {
-                "source": session.calculated_matrix.source,
-                "durations_seconds": session.calculated_matrix.durations_seconds,
-                "distances_meters": session.calculated_matrix.distances_meters,
+                "source": matrix.source,
+                "durations_seconds": matrix.durations_seconds,
+                "distances_meters": matrix.distances_meters,
             }
-            if session.calculated_matrix is not None
+            if matrix is not None
             else None
         ),
-        "calculated_travel_is_stale": session.calculated_travel_is_stale,
+        "calculated_travel_is_stale": (
+            session.calculated_travel_is_stale if matrix is not None else False
+        ),
     }
 
 

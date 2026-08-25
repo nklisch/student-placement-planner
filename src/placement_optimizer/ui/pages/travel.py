@@ -497,7 +497,9 @@ class TravelPage(QWidget):
         self._controller.notify()
 
     def _provider_failed(self, message: str) -> None:
-        self._host.set_last_detail(message)
+        # Troubleshooting details intentionally exclude roster addresses; the
+        # actionable provider message remains visible only on this project page.
+        self._host.set_last_detail("A travel provider operation failed; see the Travel times page.")
         self._message_for_mode(
             self._provider_mode,
             f"{message}. Your existing data was kept; try again or choose another travel option.",
