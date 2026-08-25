@@ -28,6 +28,23 @@ def main() -> int:
             ["codesign", "--force", *options, "--sign", args.identity, str(path)],
             check=True,
         )
+    frameworks = sorted(
+        (path for path in args.app.rglob("*.framework") if path.is_dir()),
+        key=lambda path: len(path.parts),
+        reverse=True,
+    )
+    for framework in frameworks:
+        subprocess.run(
+            [
+                "codesign",
+                "--force",
+                *options,
+                "--sign",
+                args.identity,
+                str(framework),
+            ],
+            check=True,
+        )
     subprocess.run(
         ["codesign", "--force", *options, "--sign", args.identity, str(args.app)],
         check=True,

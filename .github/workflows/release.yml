@@ -78,8 +78,11 @@ jobs:
         run: |
           $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
             Sort-Object FullName -Descending | Select-Object -First 1).FullName
-          & $signtool sign /fd SHA256 /f signing.pfx /p "$env:WINDOWS_CERTIFICATE_PASSWORD" `
-            "dist\Student Placement Planner\Student Placement Planner.exe"
+          $signArgs = @("sign", "/fd", "SHA256", "/f", "signing.pfx", "/p", $env:WINDOWS_CERTIFICATE_PASSWORD)
+          if ($env:SIGNING_KIND -eq "trusted") {
+            $signArgs += @("/tr", "http://timestamp.digicert.com", "/td", "SHA256")
+          }
+          & $signtool @signArgs "dist\Student Placement Planner\Student Placement Planner.exe"
 
       - name: Build Windows installer
         shell: pwsh
@@ -100,12 +103,32 @@ jobs:
           $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
             Sort-Object FullName -Descending | Select-Object -First 1).FullName
           $installer = (Get-ChildItem release\*-Setup.exe | Select-Object -First 1).FullName
-          & $signtool sign /fd SHA256 /f signing.pfx /p "$env:WINDOWS_CERTIFICATE_PASSWORD" $installer
+          $signArgs = @("sign", "/fd", "SHA256", "/f", "signing.pfx", "/p", $env:WINDOWS_CERTIFICATE_PASSWORD)
+          if ($env:SIGNING_KIND -eq "trusted") {
+            $signArgs += @("/tr", "http://timestamp.digicert.com", "/td", "SHA256")
+          }
+          & $signtool @signArgs $installer
           & $signtool verify /v /pa $installer
           Get-FileHash $installer -Algorithm SHA256 | ForEach-Object {
             "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($installer))"
           } | Set-Content release\SHA256SUMS-Windows.txt
           "Signing: $env:SIGNING_KIND" | Set-Content release\SIGNING-Windows.txt
+
+      - name: Smoke-test install, launch, and uninstall
+        shell: pwsh
+        run: |
+          $installer = (Get-ChildItem release\*-Setup.exe | Select-Object -First 1).FullName
+          $installDir = "$env:RUNNER_TEMP\StudentPlacementPlanner"
+          $arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=`"$installDir`""
+          $install = Start-Process $installer -ArgumentList $arguments -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $app = Start-Process "$installDir\Student Placement Planner.exe" -PassThru
+          Start-Sleep -Seconds 4
+          if ($app.HasExited) { throw "Installed application exited during smoke test" }
+          Stop-Process -Id $app.Id -Force
+          $uninstall = Start-Process "$installDir\unins000.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exited with $($uninstall.ExitCode)" }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -196,6 +219,20 @@ jobs:
           codesign --verify --verbose=2 "$DMG"
           shasum -a 256 "$DMG" | sed 's#release/##' > release/SHA256SUMS-macOS.txt
           printf 'Signing: %s\n' "$SIGNING_KIND" > release/SIGNING-macOS.txt
+
+      - name: Smoke-test disk image and application launch
+        run: |
+          DMG=$(find release -name '*.dmg' -print -quit)
+          MOUNT="$RUNNER_TEMP/spp-mount"
+          mkdir -p "$MOUNT"
+          hdiutil attach "$DMG" -mountpoint "$MOUNT" -nobrowse
+          QT_QPA_PLATFORM=offscreen "$MOUNT/Student Placement Planner.app/Contents/MacOS/Student Placement Planner" &
+          APP_PID=$!
+          sleep 4
+          kill -0 "$APP_PID"
+          kill "$APP_PID"
+          wait "$APP_PID" || true
+          hdiutil detach "$MOUNT"
 
       - uses: actions/upload-artifact@v4
         with:
