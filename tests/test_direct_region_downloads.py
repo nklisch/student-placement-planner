@@ -5,11 +5,28 @@ from pathlib import Path
 import httpx
 import pytest
 
-from placement_optimizer.travel import GeofabrikRegion, fetch_geofabrik_regions
+from placement_optimizer.travel import GeofabrikRegion, fetch_geofabrik_regions, regions
 from placement_optimizer.travel.packs import MapPackDownloadCancelled
 from placement_optimizer.travel.regions import _download_extract
 
 pytestmark = pytest.mark.asyncio
+
+
+async def test_windows_builder_can_find_packaged_libraries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    executable = tmp_path / "site-packages" / "valhalla" / "bin" / "builder.exe"
+    monkeypatch.setattr(regions.sys, "platform", "win32")
+    monkeypatch.setenv("PATH", "original-path")
+
+    environment = regions._valhalla_builder_environment(executable)
+
+    assert environment is not None
+    assert environment["PATH"].split(";") == [
+        str(tmp_path / "site-packages" / "pyvalhalla.libs"),
+        str(tmp_path / "site-packages"),
+        "original-path",
+    ]
 
 
 async def test_geofabrik_catalog_keeps_only_official_downloads() -> None:

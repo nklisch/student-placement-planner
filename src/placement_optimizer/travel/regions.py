@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import shutil
 import sys
@@ -288,6 +289,7 @@ async def _run_builder(
             str(config),
             str(pbf),
             cwd=work,
+            env=_valhalla_builder_environment(executable),
             stdout=log,
             stderr=asyncio.subprocess.STDOUT,
         )
@@ -303,6 +305,18 @@ async def _run_builder(
             raise
     if return_code != 0:
         raise MapPackError("the offline road data couldn't be prepared for this region")
+
+
+def _valhalla_builder_environment(executable: Path) -> dict[str, str] | None:
+    if sys.platform != "win32":
+        return None
+    environment = os.environ.copy()
+    package_root = executable.parent.parent.parent
+    bundled_libraries = package_root / "pyvalhalla.libs"
+    environment["PATH"] = ";".join(
+        (str(bundled_libraries), str(package_root), environment.get("PATH", ""))
+    )
+    return environment
 
 
 async def _to_thread_safely(function, /, *args, **kwargs):

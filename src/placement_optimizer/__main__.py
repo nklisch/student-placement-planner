@@ -24,10 +24,13 @@ def _offline_builder_self_test() -> int:
         import osmium  # noqa: F401
         import valhalla
 
+        from placement_optimizer.travel.regions import _valhalla_builder_environment
+
         suffix = ".exe" if sys.platform == "win32" else ""
         builder = Path(valhalla.__file__).resolve().parent / "bin" / f"valhalla_build_tiles{suffix}"
         result = subprocess.run(
             [str(builder), "--help"],
+            env=_valhalla_builder_environment(builder),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=30,
