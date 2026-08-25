@@ -70,8 +70,12 @@ jobs:
             if (Test-Path $env:SPP_SELF_TEST_REPORT) { Get-Content $env:SPP_SELF_TEST_REPORT }
             throw "Bundled OR-Tools runtime check failed"
           }
+          $env:SPP_SELF_TEST_REPORT = "$env:RUNNER_TEMP\offline-builder-self-test.txt"
           & "$appDir\Student Placement Planner.exe" --self-test-offline-builder
-          if ($LASTEXITCODE -ne 0) { throw "Bundled offline-region builder check failed" }
+          if ($LASTEXITCODE -ne 0) {
+            if (Test-Path $env:SPP_SELF_TEST_REPORT) { Get-Content $env:SPP_SELF_TEST_REPORT }
+            throw "Bundled offline-region builder check failed"
+          }
 
       - name: Prepare signing certificate
         shell: pwsh

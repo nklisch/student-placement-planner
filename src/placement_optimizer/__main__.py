@@ -11,6 +11,14 @@ from importlib.resources import as_file, files
 from pathlib import Path
 
 
+def _write_self_test_report(message: str) -> None:
+    report_path = os.environ.get("SPP_SELF_TEST_REPORT")
+    if not report_path:
+        return
+    with suppress(OSError):
+        Path(report_path).write_text(message, encoding="utf-8")
+
+
 def _offline_builder_self_test() -> int:
     try:
         import osmium  # noqa: F401
@@ -25,17 +33,13 @@ def _offline_builder_self_test() -> int:
             timeout=30,
             check=False,
         )
-    except (ImportError, OSError, subprocess.SubprocessError):
+    except Exception:
+        _write_self_test_report(traceback.format_exc())
         return 1
-    return 0 if result.returncode == 0 else 1
-
-
-def _write_self_test_report(message: str) -> None:
-    report_path = os.environ.get("SPP_SELF_TEST_REPORT")
-    if not report_path:
-        return
-    with suppress(OSError):
-        Path(report_path).write_text(message, encoding="utf-8")
+    if result.returncode != 0:
+        _write_self_test_report(f"Offline builder exited with status {result.returncode}\n")
+        return 1
+    return 0
 
 
 def _optimization_self_test() -> int:
