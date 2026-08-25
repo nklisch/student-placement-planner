@@ -2,7 +2,7 @@
 
 Student Placement Planner is a friendly, local-first desktop app that helps school staff match students to placement locations while respecting capacity, choices, group needs, and driving-time limits.
 
-[Visit the project website](https://nklisch.github.io/student-placement-planner/) · [View releases](https://github.com/nklisch/student-placement-planner/releases)
+[Visit the project website](https://nklisch.github.io/student-placement-planner/) · [Download for Windows x64](https://github.com/nklisch/student-placement-planner/releases/download/v0.1.0b1/Student-Placement-Planner-0.1.0b1-Windows-x64-Setup.exe) · [Download for Apple-Silicon Mac](https://github.com/nklisch/student-placement-planner/releases/download/v0.1.0b1/Student-Placement-Planner-0.1.0b1-macOS-Apple-Silicon.dmg)
 
 It is designed as a calm, spreadsheet-friendly tool for school staff:
 
@@ -14,9 +14,9 @@ It is designed as a calm, spreadsheet-friendly tool for school staff:
 
 ## Project status
 
-Manual entry, no-key community routing, openrouteservice, Google Maps, and offline-region workflows are implemented and tested. Offline regions can be downloaded directly from Geofabrik and prepared inside the app, without project-hosted map files. Native Windows and macOS packaging is the remaining release phase.
+The first public beta, [v0.1.0b1](https://github.com/nklisch/student-placement-planner/releases/tag/v0.1.0b1), is available as a normal Windows installer and Apple-Silicon macOS disk image. End users do not need Python or a terminal.
 
-There is no public installer yet. The first beta will be distributed through [GitHub Releases](https://github.com/nklisch/student-placement-planner/releases) as a normal Windows installer and macOS disk image. End users will not need Python or a terminal.
+Manual entry, no-key community routing, openrouteservice, Google Maps, and offline-region workflows are implemented and tested. Offline regions are downloaded directly from Geofabrik and prepared inside the app, without project-hosted map files. Preview signatures can produce a one-time operating-system warning; the release includes checksums and GitHub build attestations.
 
 ## Developer setup
 
@@ -25,7 +25,7 @@ Python 3.12 is pinned through `mise`:
 ```bash
 mise install
 python -m venv .venv
-.venv/bin/pip install -e '.[test]'
+.venv/bin/pip install -e '.[test,offline-maps]'
 .venv/bin/pytest
 ```
 
@@ -38,7 +38,7 @@ Run the desktop application with:
 Useful project pages:
 
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
-- [Google Maps setup](docs/GOOGLE_MAPS_SETUP.md)
+- [Online routing setup](docs/GOOGLE_MAPS_SETUP.md)
 - [Offline map packs](docs/MAP_PACKS.md)
 - [Product and build requirements](docs/BUILD_INSTRUCTIONS.md)
 - [Desktop interface specification](docs/UI_SPECIFICATION.md)

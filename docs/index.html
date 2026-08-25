@@ -104,11 +104,11 @@
 
     <section class="section" id="status" aria-labelledby="status-title">
       <div class="container narrow-intro">
-        <h2 id="status-title">What's ready — and what's next</h2>
-        <p>The complete workflow is built and tested. Native installers are the last step before the public beta.</p>
+        <h2 id="status-title">The public beta is ready</h2>
+        <p>Version 0.1.0 beta 1 is available for Windows x64 and Apple-Silicon Macs. Both installers were built and launch-tested on native GitHub runners.</p>
         <div class="status-grid">
           <article class="status-card">
-            <span class="badge badge-ready">Ready today</span>
+            <span class="badge badge-ready">Available now</span>
             <ul>
               <li>Spreadsheet entry, paste, and CSV import</li>
               <li>Choices, pins, groups, eligibility, and driving limits</li>
@@ -117,11 +117,11 @@
             </ul>
           </article>
           <article class="status-card status-next">
-            <span class="badge badge-next">In final testing</span>
+            <span class="badge badge-next">Beta notes</span>
             <ul>
-              <li>Normal Windows installer</li>
-              <li>Apple-Silicon macOS disk image</li>
-              <li>Operating-system signing and clean-machine checks</li>
+              <li>Windows uses a self-signed preview certificate</li>
+              <li>macOS uses an ad-hoc signature and targets Apple Silicon</li>
+              <li>Checksums and GitHub build attestations are published</li>
             </ul>
           </article>
         </div>
@@ -130,15 +130,16 @@
 
     <section class="section section-download" id="download" aria-labelledby="download-title">
       <div class="container download-card">
-        <span class="badge badge-next">In preparation</span>
-        <h2 id="download-title">Download</h2>
-        <h3>Not released yet — but not far off.</h3>
-        <p>The app and all three travel options are built and tested. Windows and macOS packages are now going through native build and installation checks so the public beta does not require Python, a terminal, or technical setup.</p>
+        <span class="badge badge-ready">Beta available</span>
+        <h2 id="download-title">Download Student Placement Planner</h2>
+        <h3>Install it like a normal desktop app.</h3>
+        <p>Python and a terminal are not required. This beta uses preview signatures, so Windows or macOS will ask you to confirm the first launch.</p>
         <div class="button-row button-row-center">
-          <a class="button button-primary" href="https://github.com/nklisch/student-placement-planner/releases">Watch the releases page</a>
-          <a class="button button-outline" href="https://github.com/nklisch/student-placement-planner#readme">Read the README</a>
+          <a class="button button-primary" href="https://github.com/nklisch/student-placement-planner/releases/download/v0.1.0b1/Student-Placement-Planner-0.1.0b1-Windows-x64-Setup.exe">Download for Windows x64</a>
+          <a class="button button-primary" href="https://github.com/nklisch/student-placement-planner/releases/download/v0.1.0b1/Student-Placement-Planner-0.1.0b1-macOS-Apple-Silicon.dmg">Download for Apple-Silicon Mac</a>
+          <a class="button button-outline" href="https://github.com/nklisch/student-placement-planner/releases/tag/v0.1.0b1">Release details</a>
         </div>
-        <p class="quiet-line">On GitHub, choose Watch → Custom → Releases to receive an email when it ships.</p>
+        <p class="quiet-line">Windows: choose More info → Run anyway if SmartScreen appears. Mac: Control-click the app and choose Open the first time. SHA-256 checksums are included on the release page.</p>
       </div>
     </section>
 
@@ -148,8 +149,8 @@
         <details><summary>Is it really free?</summary><p>Yes. Student Placement Planner is open source under the MIT license — free to use, share, and modify.</p></details>
         <details><summary>Where does student data go?</summary><p>The app has no app accounts, cloud database, or telemetry. Project files stay on your computer. If you choose an online route service, only street addresses or coordinates are sent — never names, IDs, choices, capacities, or rules.</p></details>
         <details><summary>Can it work without internet?</summary><p>Yes. Enter driving times yourself, or download an OpenStreetMap region directly from Geofabrik in the app. The app prepares it locally; later address matching and road searches run entirely on your computer.</p></details>
-        <details><summary>Do I need to be good with computers?</summary><p>No. The public beta will install like a normal program. Until then, running it requires developer tools; the README explains those early setup steps.</p></details>
-        <details><summary>Does it work on Windows or Mac?</summary><p>Both are being packaged now. The first macOS beta targets Apple Silicon, and downloads will appear on the releases page.</p></details>
+        <details><summary>Do I need to be good with computers?</summary><p>No. Download the installer above and open it like a normal program. Because this beta has preview signatures, follow the one-time confirmation instructions shown in the download section.</p></details>
+        <details><summary>Does it work on Windows or Mac?</summary><p>Yes. The beta supports Windows x64 and Apple-Silicon Macs. An Intel Mac build is not currently available.</p></details>
         <details><summary>How many students can it handle?</summary><p>It is designed for up to about 100 students, which covers a typical school placement run.</p></details>
       </div>
     </section>

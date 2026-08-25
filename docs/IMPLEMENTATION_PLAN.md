@@ -176,12 +176,12 @@ UI design and implementation follow the restricted model roles in `docs/BUILD_IN
 
 ### Phase F — Packaging and release candidate
 
-- [ ] Bundle Windows and macOS applications with pinned runtimes/dependencies.
-- [ ] Create platform installer, signing, and macOS notarization workflows.
-- [ ] Test clean-machine install, first launch, map-pack setup, upgrade, and uninstall.
-- [ ] Add sample data and concise user documentation.
-- [ ] Run full unit, property, integration, UI, privacy, and packaging tests.
-- [ ] Exercise provider outages, corrupt input/project, missing map pack, cancellation, and infeasibility.
+- [x] Bundle Windows and macOS applications with pinned runtimes/dependencies.
+- [x] Create platform installer, signing, and macOS notarization workflows.
+- [x] Test clean-runner install, first launch, bundled map builder, and uninstall; validate a direct Andorra region build end to end.
+- [x] Add sample data and concise user documentation.
+- [x] Run full unit, property, integration, UI, privacy, and packaging tests.
+- [x] Exercise provider outages, corrupt input/project, missing map pack, cancellation, and infeasibility.
 
 **Large-seam review 2:** Completed with Sol xhigh. Windows prerelease version metadata, cooperative offline-matrix cancellation, and startup degradation when optional map storage is unavailable were fixed with regression coverage; no further release-blocking findings remained.
 
