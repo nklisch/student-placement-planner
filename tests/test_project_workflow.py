@@ -137,7 +137,7 @@ def test_project_file_round_trip(tmp_path) -> None:
         travel_matrix=matrix_from_entries(students, locations, entries),
         rules=AssignmentRules(preferences=(Preference("s1", ("l1",)),)),
     )
-    path = tmp_path / "example.spo.json"
+    path = tmp_path / "example.spp.json"
 
     save_project(original, path)
     loaded = load_project(path)
@@ -147,7 +147,7 @@ def test_project_file_round_trip(tmp_path) -> None:
 
 
 def test_project_missing_optional_settings_uses_documented_defaults(tmp_path) -> None:
-    path = tmp_path / "minimal.spo.json"
+    path = tmp_path / "minimal.spp.json"
     path.write_text(
         json.dumps({"schema_version": 1, "students": [], "locations": []}),
         encoding="utf-8",
@@ -165,7 +165,7 @@ def test_project_missing_optional_settings_uses_documented_defaults(tmp_path) ->
     ],
 )
 def test_malformed_constraint_values_are_rejected(tmp_path, bad_value: dict) -> None:
-    path = tmp_path / "malformed.spo.json"
+    path = tmp_path / "malformed.spp.json"
     path.write_text(
         json.dumps({"schema_version": 1, "students": [], "locations": [], **bad_value}),
         encoding="utf-8",
@@ -175,7 +175,7 @@ def test_malformed_constraint_values_are_rejected(tmp_path, bad_value: dict) -> 
 
 
 def test_project_save_replaces_existing_file(tmp_path) -> None:
-    path = tmp_path / "example.spo.json"
+    path = tmp_path / "example.spp.json"
     project = PlacementProject(name="First")
     save_project(project, path)
     save_project(replace(project, name="Second"), path)
@@ -186,11 +186,11 @@ def test_project_save_wraps_parent_creation_failure(tmp_path) -> None:
     occupied_path = tmp_path / "not-a-directory"
     occupied_path.write_text("occupied", encoding="utf-8")
     with pytest.raises(ProjectFileError, match="Could not save project"):
-        save_project(PlacementProject(), occupied_path / "project.spo.json")
+        save_project(PlacementProject(), occupied_path / "project.spp.json")
 
 
 def test_corrupt_project_file_has_a_recoverable_error(tmp_path) -> None:
-    path = tmp_path / "broken.spo.json"
+    path = tmp_path / "broken.spp.json"
     path.write_text("not json", encoding="utf-8")
 
     with pytest.raises(ProjectFileError, match="Start a new project"):

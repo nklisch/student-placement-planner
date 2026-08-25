@@ -190,11 +190,11 @@ class TroubleshootingDialog(QDialog):
 class AboutDialog(QDialog):
     def __init__(self, version: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("About Student Placement Optimizer")
+        self.setWindowTitle("About Student Placement Planner")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(8)
-        title = QLabel("Student Placement Optimizer")
+        title = QLabel("Student Placement Planner")
         title.setProperty("role", "title")
         layout.addWidget(title)
         layout.addWidget(QLabel(f"Version {version}"))

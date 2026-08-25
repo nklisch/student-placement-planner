@@ -1,15 +1,22 @@
-# Student Placement Optimizer
+# Student Placement Planner
 
-A local-first desktop utility for assigning a school cohort to placement locations while respecting capacity and practical constraints and optimizing estimated driving time.
+Student Placement Planner is a local-first desktop utility for assigning students to placement locations while respecting capacity, choices, eligibility, group rules, and driving-time limits.
 
-The project is under active implementation. See:
+It is designed as a calm, spreadsheet-friendly tool for school staff:
 
-- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) for the architecture and staged build plan.
-- [`docs/BUILD_INSTRUCTIONS.md`](docs/BUILD_INSTRUCTIONS.md) for durable product and implementation priorities.
+- type directly into editable tables, paste from a spreadsheet, or import CSV files;
+- compare placements by road driving time;
+- choose fair-commute, lowest-total-driving, or choices-first priorities;
+- save projects explicitly and export or print results;
+- keep roster data on the local computer, with no accounts or telemetry.
 
-The intended release is a normal Windows/macOS installer; end users will not need Python or a terminal.
+## Project status
 
-## Current developer setup
+The manual travel-time workflow and desktop interface are complete and tested. Google Maps integration, downloadable offline map packs, and native Windows/macOS installers are under active development.
+
+The first public beta will be distributed through [GitHub Releases](https://github.com/nklisch/student-placement-planner/releases) as a normal Windows installer and signed macOS disk image. End users will not need Python or a terminal.
+
+## Developer setup
 
 Python 3.12 is pinned through `mise`:
 
@@ -20,4 +27,14 @@ python -m venv .venv
 .venv/bin/pytest
 ```
 
-The current code contains the independent exact reference solver and initial travel-provider boundaries. The desktop application and advanced OR-Tools model are the next implementation phases.
+Run the desktop application with:
+
+```bash
+.venv/bin/python -m placement_optimizer
+```
+
+See [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) for the staged build plan and [`docs/BUILD_INSTRUCTIONS.md`](docs/BUILD_INSTRUCTIONS.md) for durable product requirements.
+
+## License
+
+Student Placement Planner is available under the [MIT License](LICENSE).

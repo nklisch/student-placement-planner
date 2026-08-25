@@ -26,7 +26,7 @@ Default window: 1120 × 720. Minimum: 960 × 600.
 - 200-point left navigation rail.
 - Resizable central content stack.
 - 56-point persistent footer.
-- Window title: `<Project name> — Student Placement Optimizer`.
+- Window title: `<Project name> — Student Placement Planner`.
 - Platform-standard modified indicator when unsaved work exists.
 
 ### Five navigation steps

@@ -3,13 +3,13 @@ requires = ["hatchling>=1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "student-placement-optimizer"
+name = "student-placement-planner"
 version = "0.1.0"
-description = "A local-first desktop utility for student placement optimization"
+description = "A local-first desktop utility for planning student placements"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-license = { text = "MIT" }
-authors = [{ name = "Student Placement Optimizer contributors" }]
+license = "MIT"
+authors = [{ name = "Student Placement Planner contributors" }]
 dependencies = [
   "httpx>=0.27,<1",
   "ortools>=9.11,<10",
@@ -34,7 +34,12 @@ build = [
 ]
 
 [project.scripts]
-placement-optimizer = "placement_optimizer.__main__:main"
+student-placement-planner = "placement_optimizer.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/nklisch/student-placement-planner"
+Repository = "https://github.com/nklisch/student-placement-planner"
+Issues = "https://github.com/nklisch/student-placement-planner/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/placement_optimizer"]

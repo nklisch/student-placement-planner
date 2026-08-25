@@ -1,4 +1,4 @@
-# Student Placement Optimizer — Implementation Plan
+# Student Placement Planner — Implementation Plan
 
 ## 1. Product outcome
 

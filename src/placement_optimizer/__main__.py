@@ -12,7 +12,7 @@ def main() -> int:
     from placement_optimizer.ui.theme import apply_theme, watch_color_scheme
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Student Placement Optimizer")
+    app.setApplicationName("Student Placement Planner")
     app.setOrganizationName("StudentPlacementOptimizer")
     app.setDesktopFileName("student-placement-optimizer")
     apply_theme(app)

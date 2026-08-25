@@ -64,7 +64,7 @@ STEP_HELP = (
     "Enter or calculate each student's drive to each location.",
     "Review, export, or print the latest placements.",
 )
-PROJECT_FILE_SUFFIX = ".spo.json"
+PROJECT_FILE_SUFFIX = ".spp.json"
 
 _PRESETS = (
     ("Fair commute (recommended)", FAIR_COMMUTE_OBJECTIVES),
@@ -177,9 +177,9 @@ class MainWindow(QMainWindow):
         self._last_detail = ""
         self._help_center: HelpCenterDialog | None = None
         self._walkthrough: GuidedWalkthroughDialog | None = None
-        self._settings = QSettings("StudentPlacementOptimizer", "StudentPlacementOptimizer")
+        self._settings = QSettings("StudentPlacementPlanner", "StudentPlacementPlanner")
 
-        self.setWindowTitle("[*]Untitled placement — Student Placement Optimizer")
+        self.setWindowTitle("[*]Untitled placement — Student Placement Planner")
         self.resize(1120, 720)
         self.setMinimumSize(960, 600)
 
@@ -411,7 +411,7 @@ class MainWindow(QMainWindow):
     def refresh_chrome(self) -> None:
         session = self.controller.session
         name = session.name.strip() or "Untitled placement"
-        self.setWindowTitle(f"[*]{name} — Student Placement Optimizer")
+        self.setWindowTitle(f"[*]{name} — Student Placement Planner")
         self.setWindowModified(session.is_modified)
 
         readiness = session.readiness()

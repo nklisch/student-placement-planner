@@ -5,7 +5,7 @@ from __future__ import annotations
 
 def test_save_and_open_round_trip(ready_window, qtbot, tmp_path) -> None:
     window = ready_window
-    target = tmp_path / "example.spo.json"
+    target = tmp_path / "example.spp.json"
 
     assert window._save_to(str(target))
     assert target.exists()
@@ -22,7 +22,7 @@ def test_save_and_open_round_trip(ready_window, qtbot, tmp_path) -> None:
 
 
 def test_corrupt_project_offers_recovery(window, tmp_path, monkeypatch) -> None:
-    broken = tmp_path / "broken.spo.json"
+    broken = tmp_path / "broken.spp.json"
     broken.write_text("not json at all", encoding="utf-8")
     monkeypatch.setattr(window, "_ask_corrupt_project", lambda: "new")
 
@@ -40,7 +40,7 @@ def test_incomplete_draft_save_preserves_every_raw_value(window, fill_small, tmp
     session.update_location(0, capacity="")
     session.set_manual_time(session.students[0].key, session.locations[1].key, "many")
 
-    target = tmp_path / "incomplete.spo.json"
+    target = tmp_path / "incomplete.spp.json"
     assert window._save_to(str(target))
 
     window._open_path(str(target))

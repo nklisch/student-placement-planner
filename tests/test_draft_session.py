@@ -169,7 +169,7 @@ def test_incomplete_draft_file_round_trip_preserves_raw_rows_and_cells(tmp_path)
     session.update_location(0, capacity="")
     session.set_manual_time("student-a", "location-b", "many")
     session.set_manual_distance("student-a", "location-a", 3200)
-    path = tmp_path / "draft.spo.json"
+    path = tmp_path / "draft.spp.json"
 
     save_draft_session(session, path)
     restored = load_draft_session(path)
@@ -184,7 +184,7 @@ def test_draft_loader_accepts_earlier_valid_project_files(tmp_path) -> None:
     session = ready_session()
     project = session.build_project().project
     assert project is not None
-    path = tmp_path / "legacy.spo.json"
+    path = tmp_path / "legacy.spp.json"
     save_project(project, path)
     restored = load_draft_session(path)
     assert restored.build_project().project == project

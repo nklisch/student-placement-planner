@@ -36,7 +36,7 @@ class HelpCenterDialog(QDialog):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        title = make_label("Student Placement Optimizer guide", role="title")
+        title = make_label("Student Placement Planner guide", role="title")
         layout.addWidget(title)
 
         body = QHBoxLayout()
