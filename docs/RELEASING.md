@@ -1,6 +1,6 @@
 # Building and publishing desktop releases
 
-GitHub Actions builds the application on native Windows x64 and Apple-Silicon macOS runners. Each artifact contains Python, Qt, OR-Tools, and the optional offline Valhalla engine; users do not install those separately.
+GitHub Actions builds the application on native Windows x64 and Apple-Silicon macOS runners. Each artifact contains Python, Qt, OR-Tools, the offline Valhalla engine and local region-building tools; users do not install those separately.
 
 ## Try a build without publishing
 
@@ -63,6 +63,7 @@ Linux can validate the shared PyInstaller graph even though Linux is not a relea
 ```bash
 python -m pip install '.[offline-maps,build]'
 pyinstaller --clean --noconfirm packaging/student-placement-planner.spec
+'dist/Student Placement Planner/Student Placement Planner' --self-test-offline-builder
 QT_QPA_PLATFORM=offscreen 'dist/Student Placement Planner/Student Placement Planner'
 ```
 
