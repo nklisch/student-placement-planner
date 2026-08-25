@@ -50,6 +50,11 @@ if sys.platform == "win32":
     runtime_candidates.extend(
         visual_studio.glob("*/VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT")
     )
+    # Hosted runners install the official x64 Redistributable even when the
+    # Visual Studio app-local folder is absent. Its System32 copies are the same
+    # redistributable runtime and are copied into our private application folder.
+    system_root = Path(os.environ.get("SystemRoot", "C:/Windows"))
+    runtime_candidates.append(system_root / "System32")
     runtime_dir = next(
         (
             candidate
