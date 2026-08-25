@@ -71,8 +71,6 @@ jobs:
             & openssl pkcs12 -export -out signing.pfx -inkey signing.key `
               -in signing.pem -passout "pass:$password"
             if ($LASTEXITCODE -ne 0) { throw "OpenSSL could not create the signing bundle" }
-            certutil -user -f -addstore Root signing.pem | Out-Null
-            certutil -user -f -addstore TrustedPublisher signing.pem | Out-Null
             "WINDOWS_CERTIFICATE_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
             "SIGNING_KIND=self-signed-preview" | Out-File -FilePath $env:GITHUB_ENV -Append
           }
@@ -87,6 +85,7 @@ jobs:
             $signArgs += @("/tr", "http://timestamp.digicert.com", "/td", "SHA256")
           }
           & $signtool @signArgs "dist\Student Placement Planner\Student Placement Planner.exe"
+          if ($LASTEXITCODE -ne 0) { throw "The application executable could not be signed" }
 
       - name: Build Windows installer
         shell: pwsh
@@ -112,7 +111,16 @@ jobs:
             $signArgs += @("/tr", "http://timestamp.digicert.com", "/td", "SHA256")
           }
           & $signtool @signArgs $installer
-          & $signtool verify /v /pa $installer
+          if ($LASTEXITCODE -ne 0) { throw "The installer could not be signed" }
+          if ($env:SIGNING_KIND -eq "trusted") {
+            & $signtool verify /v /pa $installer
+            if ($LASTEXITCODE -ne 0) { throw "The trusted installer signature is invalid" }
+          } else {
+            $signature = Get-AuthenticodeSignature $installer
+            if ($null -eq $signature.SignerCertificate -or $signature.Status -in @("NotSigned", "HashMismatch")) {
+              throw "The preview installer signature is missing or invalid"
+            }
+          }
           Get-FileHash $installer -Algorithm SHA256 | ForEach-Object {
             "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($installer))"
           } | Set-Content release\SHA256SUMS-Windows.txt

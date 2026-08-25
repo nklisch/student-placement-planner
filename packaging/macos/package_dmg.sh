@@ -20,13 +20,25 @@ fi
 
 cp -R "$APP_PATH" "$STAGING/Student Placement Planner.app"
 ln -s /Applications "$STAGING/Applications"
-rm -f "$DMG"
-hdiutil create \
-  -volname "Student Placement Planner" \
-  -srcfolder "$STAGING" \
-  -format UDZO \
-  -ov \
-  "$DMG" >/dev/null
+attempt=1
+while :; do
+  rm -f "$DMG"
+  if hdiutil create \
+    -volname "Student Placement Planner" \
+    -srcfolder "$STAGING" \
+    -format UDZO \
+    -ov \
+    "$DMG" >/dev/null; then
+    break
+  fi
+  if [ "$attempt" -ge 3 ]; then
+    echo "Could not create the disk image after $attempt attempts" >&2
+    exit 1
+  fi
+  attempt=$((attempt + 1))
+  sync
+  sleep 3
+done
 
 if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
   codesign --force --options runtime --timestamp --sign "$MACOS_SIGN_IDENTITY" "$DMG"
