@@ -298,9 +298,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
+          cat > release-notes.md <<'EOF'
+          This is the first public beta of Student Placement Planner. It includes normal installers for Windows x64 and Apple-Silicon macOS; users do not need Python or a terminal.
+
+          Highlights include spreadsheet entry and CSV import, capacity and placement rules, ordered placement goals, manual travel times, no-key community routing, openrouteservice and Google options, and offline OpenStreetMap regions downloaded directly from Geofabrik and prepared inside the app.
+
+          **Preview signing:** unless the attached `SIGNING` files say otherwise, Windows uses a self-signed preview certificate and macOS uses an ad-hoc signature. Windows SmartScreen may require **More info → Run anyway**. On macOS, use **Control-click → Open** the first time. These warnings require paid/trusted platform credentials to remove; checksums and GitHub attestations are included so downloads can be verified.
+          EOF
           gh release create "$TAG" release-artifacts/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "Student Placement Planner $TAG" \
-            --notes "Preview builds use self-signed Windows and ad-hoc macOS signatures unless trusted signing secrets are configured. Check the included SIGNING files and SHA256SUMS.txt before installing." \
+            --notes-file release-notes.md \
             --generate-notes \
             --prerelease
