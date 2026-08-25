@@ -183,7 +183,7 @@ UI design and implementation follow the restricted model roles in `docs/BUILD_IN
 - [ ] Run full unit, property, integration, UI, privacy, and packaging tests.
 - [ ] Exercise provider outages, corrupt input/project, missing map pack, cancellation, and infeasibility.
 
-**Large-seam review 2:** Sol xhigh reviews the release candidate. Parent fixes findings inline.
+**Large-seam review 2:** Completed with Sol xhigh. Windows prerelease version metadata, cooperative offline-matrix cancellation, and startup degradation when optional map storage is unavailable were fixed with regression coverage; no further release-blocking findings remained.
 
 **Gate:** clean Windows/macOS users can install, complete a sample run, export results, and recover from expected failures without technical help.
 

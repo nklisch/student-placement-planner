@@ -78,7 +78,18 @@ class TravelPage(QWidget):
         self._controller = controller
         self._host = host
         self._workflow = workflow or TravelWorkflow()
-        self._pack_store = pack_store or MapPackStore()
+        self._pack_store_problem = ""
+        if pack_store is not None:
+            self._pack_store: MapPackStore | None = pack_store
+        else:
+            try:
+                self._pack_store = MapPackStore()
+            except OSError:
+                self._pack_store = None
+                self._pack_store_problem = (
+                    "Offline region storage isn't available. Check the app-data folder "
+                    "permissions and free space; manual and online travel options still work."
+                )
         self._pack_dialog: MapPackDialog | None = None
         self.model = ManualTimesModel(controller)
         self._import_worker: CsvImportWorker | None = None
@@ -515,12 +526,12 @@ class TravelPage(QWidget):
                 return await self._workflow.review_google(travel_input, key)
 
         else:
-            pack = self._pack_store.active()
+            pack = self._pack_store.active() if self._pack_store is not None else None
             if pack is None or not pack.compatible:
                 self.offline_message.setText(
                     pack.problem
                     if pack is not None
-                    else "Choose or download an offline region first."
+                    else self._pack_store_problem or "Choose or download an offline region first."
                 )
                 return
 
@@ -554,7 +565,7 @@ class TravelPage(QWidget):
                 return await self._workflow.calculate_google(review, key)
 
         else:
-            pack = self._pack_store.active()
+            pack = self._pack_store.active() if self._pack_store is not None else None
             if pack is None:
                 self.offline_message.setText("The selected offline region is no longer available.")
                 return
@@ -716,8 +727,9 @@ class TravelPage(QWidget):
         self.offline_view_button.setEnabled(
             enabled and self._controller.session.calculated_matrix is not None
         )
-        self.offline_calculate_button.setEnabled(enabled and self._pack_store.active() is not None)
-        self.manage_packs_button.setEnabled(enabled)
+        active_pack = self._pack_store.active() if self._pack_store is not None else None
+        self.offline_calculate_button.setEnabled(enabled and active_pack is not None)
+        self.manage_packs_button.setEnabled(enabled and self._pack_store is not None)
 
     def _message_for_mode(self, mode: TravelMode | None, message: str) -> None:
         if mode is TravelMode.COMMUNITY:
@@ -732,6 +744,9 @@ class TravelPage(QWidget):
     # --- map packs -------------------------------------------------------
 
     def manage_map_packs(self) -> None:
+        if self._pack_store is None:
+            self.offline_message.setText(self._pack_store_problem)
+            return
         if self._pack_dialog is None:
             self._pack_dialog = MapPackDialog(self._pack_store, self)
             self._pack_dialog.packActivated.connect(self._pack_activated)
@@ -745,7 +760,7 @@ class TravelPage(QWidget):
         self.refresh_page()
 
     def pack_description(self) -> str:
-        pack = self._pack_store.active()
+        pack = self._pack_store.active() if self._pack_store is not None else None
         if pack is None:
             return "No offline map pack selected"
         return f"{pack.manifest.name} {pack.manifest.version}"
@@ -816,8 +831,10 @@ class TravelPage(QWidget):
         self.table.setVisible(has_grid)
         self.empty_hint.setVisible(not has_grid)
 
-        active_pack = self._pack_store.active()
-        if active_pack is None:
+        active_pack = self._pack_store.active() if self._pack_store is not None else None
+        if self._pack_store is None:
+            self.offline_pack_label.setText(self._pack_store_problem)
+        elif active_pack is None:
             self.offline_pack_label.setText("No offline region selected.")
         elif active_pack.compatible:
             self.offline_pack_label.setText(
@@ -838,6 +855,7 @@ class TravelPage(QWidget):
             "Review and recalculate" if calculated_ready else "Review addresses and calculate"
         )
         if self._provider_worker is None:
+            self.manage_packs_button.setEnabled(self._pack_store is not None)
             self.offline_calculate_button.setEnabled(
                 active_pack is not None and active_pack.compatible
             )

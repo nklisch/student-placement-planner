@@ -16,6 +16,7 @@ from placement_optimizer.travel import (
     TravelDataError,
     TravelMatrix,
 )
+from placement_optimizer.ui.mainwindow import MainWindow
 from placement_optimizer.ui.pages import travel as travel_module
 
 
@@ -125,6 +126,24 @@ def _matrix(review: TravelCoordinateReview, source: str) -> TravelMatrix:
         tuple(tuple(300 for _ in review.locations) for _ in review.students),
         source,
     )
+
+
+def test_map_storage_failure_disables_only_offline_mode(qtbot, monkeypatch) -> None:
+    def unavailable_store():
+        raise OSError("read-only app data")
+
+    monkeypatch.setattr(travel_module, "MapPackStore", unavailable_store)
+    degraded_window = MainWindow()
+    degraded_window._confirm_close = lambda: "discard"
+    qtbot.addWidget(degraded_window)
+    page = degraded_window.pages[3]
+
+    assert not page.manage_packs_button.isEnabled()
+    assert "Offline region storage isn't available" in page.offline_pack_label.text()
+    page.manual_card.select()
+    assert degraded_window.controller.session.travel_mode is TravelMode.MANUAL
+    page.online_card.select()
+    assert degraded_window.controller.session.travel_mode is TravelMode.COMMUNITY
 
 
 def test_offline_mode_explains_that_a_region_is_needed(window, fill_small) -> None:

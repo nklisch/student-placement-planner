@@ -211,6 +211,56 @@ async def test_cancelled_pack_download_keeps_partial_file(tmp_path) -> None:
     assert partials and partials[0].stat().st_size > 0
 
 
+@pytest.mark.asyncio
+async def test_valhalla_cancellation_stops_before_the_next_native_block(tmp_path) -> None:
+    import asyncio
+    from threading import Event
+
+    pack = MapPackStore(tmp_path / "store", runtime_valhalla_version="3.8.3").install_archive(
+        _bundle(tmp_path)
+    )
+    started = Event()
+    release = Event()
+    calls = 0
+
+    class Actor:
+        def matrix(self, request):
+            nonlocal calls
+            calls += 1
+            started.set()
+            release.wait(timeout=5)
+            rows = len(request["sources"])
+            columns = len(request["targets"])
+            return {
+                "sources_to_targets": {
+                    "distances": [[1] * columns for _ in range(rows)],
+                    "durations": [[1] * columns for _ in range(rows)],
+                }
+            }
+
+    router = ValhallaRouteMatrix(
+        pack,
+        block_size=1,
+        actor_factory=lambda _config: Actor(),
+        config_factory=lambda **_kwargs: {},
+    )
+    route_task = asyncio.create_task(
+        router.route_matrix(
+            (Coordinate(51.5, -0.12), Coordinate(51.6, -0.13)),
+            (Coordinate(51.7, -0.14), Coordinate(51.8, -0.15)),
+        )
+    )
+    assert await asyncio.to_thread(started.wait, 2)
+    route_task.cancel()
+    await asyncio.sleep(0)
+    assert not route_task.done()
+    release.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await route_task
+    assert calls == 1
+
+
 def test_valhalla_adapter_parses_concise_matrix_with_network_blocked(tmp_path, monkeypatch) -> None:
     import socket
 

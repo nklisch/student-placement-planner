@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Sequence
+from contextlib import suppress
 from itertools import islice
 from math import isfinite
 from typing import Protocol
@@ -64,7 +66,7 @@ class ValhallaRouteMatrix:
                     "verbose": False,
                 }
                 try:
-                    response = actor.matrix(request)
+                    response = await _native_matrix(actor, request)
                     block_distances, block_durations = _parse_matrix(
                         response,
                         len(origin_block),
@@ -124,6 +126,20 @@ class ValhallaRouteMatrix:
                 f"{self._pack.manifest.name} couldn't be opened for offline routing"
             ) from error
         return self._actor
+
+
+async def _native_matrix(actor: _Actor, request: dict[str, object]) -> object:
+    """Run one native block off-loop and never abandon its filesystem-backed actor."""
+
+    task = asyncio.create_task(asyncio.to_thread(actor.matrix, request))
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        # Native code cannot be interrupted safely. Wait for only the current
+        # block, then propagate cancellation before another block can start.
+        with suppress(Exception):
+            await task
+        raise
 
 
 def _location(coordinate: Coordinate) -> dict[str, float]:
