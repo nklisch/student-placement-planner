@@ -33,6 +33,12 @@ from placement_optimizer.travel.packs import (
     MapPackStore,
     file_sha256,
 )
+from placement_optimizer.travel.regions import (
+    GEOFABRIK_CATALOG_URL,
+    GeofabrikRegion,
+    fetch_geofabrik_regions,
+    prepare_geofabrik_region,
+)
 from placement_optimizer.travel.service import (
     ResolvedPlace,
     TravelCoordinateReview,
@@ -45,10 +51,12 @@ from placement_optimizer.travel.valhalla import ValhallaRouteMatrix
 
 __all__ = [
     "DEFAULT_PACK_CATALOG_URL",
+    "GEOFABRIK_CATALOG_URL",
     "AddressIndexBuilder",
     "AddressRecord",
     "Geocoder",
     "GeocodingResult",
+    "GeofabrikRegion",
     "GoogleGeocoder",
     "GoogleRoutesMatrix",
     "InstalledMapPack",
@@ -73,9 +81,11 @@ __all__ = [
     "build_map_pack",
     "build_travel_matrix",
     "create_address_index",
+    "fetch_geofabrik_regions",
     "file_sha256",
     "matrix_from_entries",
     "normalize_address",
+    "prepare_geofabrik_region",
     "resolve_travel_coordinates",
     "route_reviewed_matrix",
 ]

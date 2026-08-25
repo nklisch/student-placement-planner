@@ -1,4 +1,4 @@
-# Google Maps setup
+# Online routing setup
 
 Google Maps is optional. The **Community OpenStreetMap services** option needs no account or key and is suitable for occasional use. A free [openrouteservice](https://openrouteservice.org/dev/#/signup) account is another alternative. Manual travel times and downloaded offline regions need no online routing service at all.
 

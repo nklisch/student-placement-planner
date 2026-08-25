@@ -23,8 +23,8 @@ These instructions are durable for the current build. If a later decision change
 - Travel metric: stable estimated driving time is primary; road distance is reported.
 - Map modes:
   - Manual travel matrix: fully offline, no map dependency.
-  - Offline regional map pack: local geocoding and Valhalla road routing.
-  - Online maps: explicit opt-in provider configuration.
+  - Offline regional map: raw extracts downloaded directly from Geofabrik and prepared locally, with optional ready-made packs; local geocoding and Valhalla road routing.
+  - Online maps: no-key shared Nominatim/OSRM for occasional use, or explicit openrouteservice/Google key configuration.
 - Constraints in the intended core: exact-one assignment, location capacity, eligibility, ranked choices, pinned/prohibited assignments, commute limits, and together/separate groups.
 - Optimization: ordered objectives rather than an unexplained weighted score. Presets cover fair commute and lowest total travel; advanced users may reorder supported objectives or apply bounds.
 - Main result: assignment, travel time/distance, preference outcome, capacity use, longest/average commute, and actionable warnings. Solver/map diagnostics live behind an optional troubleshooting view. Do not build a heavy provenance or audit product.
@@ -62,7 +62,7 @@ Do **not** add speculative file-identity checks, filesystem allowlists, mount-ty
 - PySide6 / Qt 6 native desktop UI.
 - OR-Tools native solver bindings for advanced constraints and proof status.
 - A small independent exact assignment implementation retained as a reference oracle for tests.
-- pyvalhalla for in-process offline road routing; regional packs contain compatible routing tiles and a SQLite address index.
+- pyvalhalla for in-process offline road routing and local tile preparation; installed regions contain compatible routing tiles and a SQLite address index built from a direct Geofabrik extract or ready-made pack.
 - SQLite/FTS for offline address lookup and lightweight local settings where appropriate.
 - httpx for opt-in online map requests.
 - PyInstaller initially for bundled executables, with platform-native signed installer/notarization steps.

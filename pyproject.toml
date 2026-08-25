@@ -20,6 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 offline-maps = [
+  "osmium>=4,<5",
   "pyvalhalla==3.8.3",
 ]
 pack-build = [

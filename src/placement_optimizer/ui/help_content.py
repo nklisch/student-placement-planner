@@ -173,7 +173,7 @@ HELP_TOPICS = (
             ),
             HelpEntry(
                 "Using maps",
-                "Download an offline region once to calculate on this computer, use the occasional-use community option with no key, or connect openrouteservice or Google. Online services receive only addresses or coordinates—never names, IDs, choices, capacities, or rules. Every map option lets you review address matches before calculation.",
+                "Download an OpenStreetMap region directly from Geofabrik and let the app prepare it for offline use, use the occasional-use community option with no key, or connect openrouteservice or Google. Online services receive only addresses or coordinates—never names, IDs, choices, capacities, or rules. Every map option lets you review address matches before calculation.",
             ),
         ),
     ),

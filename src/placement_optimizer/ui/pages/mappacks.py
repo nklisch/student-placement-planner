@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
@@ -22,11 +23,14 @@ from PySide6.QtWidgets import (
 
 from placement_optimizer.travel import (
     DEFAULT_PACK_CATALOG_URL,
+    GeofabrikRegion,
     InstalledMapPack,
     MapPackCatalog,
     MapPackCatalogEntry,
     MapPackError,
     MapPackStore,
+    fetch_geofabrik_regions,
+    prepare_geofabrik_region,
 )
 from placement_optimizer.ui.workers import AsyncOperationWorker
 
@@ -46,12 +50,13 @@ class MapPackDialog(QDialog):
         self._store = store
         self._catalog_url = catalog_url
         self._catalog = MapPackCatalog()
+        self._regions: tuple[GeofabrikRegion, ...] = ()
         self._worker: AsyncOperationWorker | None = None
         self._operation = ""
         self._close_when_done = False
 
         self.setWindowTitle("Offline map packs")
-        self.setMinimumSize(620, 460)
+        self.setMinimumSize(720, 620)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
@@ -81,7 +86,7 @@ class MapPackDialog(QDialog):
         installed_actions.addStretch(1)
         layout.addLayout(installed_actions)
 
-        layout.addWidget(QLabel("Available regions"))
+        layout.addWidget(QLabel("Ready-made regions (optional)"))
         available_row = QHBoxLayout()
         self.available_combo = QComboBox()
         self.available_combo.setAccessibleName("Downloadable offline map packs")
@@ -93,6 +98,31 @@ class MapPackDialog(QDialog):
         available_row.addWidget(self.download_button)
         available_row.addWidget(self.refresh_button)
         layout.addLayout(available_row)
+
+        layout.addWidget(QLabel("Download directly from OpenStreetMap"))
+        direct_help = QLabel(
+            "Choose a Geofabrik region. The app downloads the current OpenStreetMap extract "
+            "from Geofabrik and prepares it on this computer; this project does not host it."
+        )
+        direct_help.setWordWrap(True)
+        direct_help.setProperty("role", "secondary")
+        layout.addWidget(direct_help)
+        direct_row = QHBoxLayout()
+        self.region_combo = QComboBox()
+        self.region_combo.setEditable(True)
+        self.region_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.region_combo.completer().setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.region_combo.completer().setFilterMode(Qt.MatchFlag.MatchContains)
+        self.region_combo.setAccessibleName("OpenStreetMap regions from Geofabrik")
+        self.region_combo.currentIndexChanged.connect(lambda _index: self._update_actions())
+        self.prepare_region_button = QPushButton("Download and prepare selected region")
+        self.prepare_region_button.clicked.connect(self._prepare_selected_region)
+        self.refresh_regions_button = QPushButton("Refresh OpenStreetMap list")
+        self.refresh_regions_button.clicked.connect(self.refresh_source_regions)
+        direct_row.addWidget(self.region_combo, stretch=1)
+        direct_row.addWidget(self.prepare_region_button)
+        direct_row.addWidget(self.refresh_regions_button)
+        layout.addLayout(direct_row)
 
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
@@ -123,7 +153,8 @@ class MapPackDialog(QDialog):
 
         self._refresh_installed()
         self._render_catalog()
-        QTimer.singleShot(0, self.refresh_catalog)
+        self._render_regions()
+        QTimer.singleShot(0, self.refresh_source_regions)
 
     def _refresh_installed(self) -> None:
         active = self._store.active()
@@ -158,6 +189,89 @@ class MapPackDialog(QDialog):
             size = _format_size(entry.archive_size)
             self.available_combo.addItem(f"{entry.name} ({size}){suffix}", entry)
         self.download_button.setEnabled(bool(self._catalog.packs) and self._worker is None)
+
+    def _render_regions(self) -> None:
+        selected = self.region_combo.currentData()
+        selected_id = selected.region_id if isinstance(selected, GeofabrikRegion) else ""
+        self.region_combo.blockSignals(True)
+        self.region_combo.clear()
+        self.region_combo.addItem("Type a country, state, or region…", None)
+        selected_index = 0
+        for region in self._regions:
+            self.region_combo.addItem(region.display_name, region)
+            if region.region_id == selected_id:
+                selected_index = self.region_combo.count() - 1
+        self.region_combo.setCurrentIndex(selected_index)
+        self.region_combo.blockSignals(False)
+        self.prepare_region_button.setEnabled(
+            isinstance(self.region_combo.currentData(), GeofabrikRegion) and self._worker is None
+        )
+
+    def refresh_source_regions(self) -> None:
+        if self._worker is not None:
+            return
+
+        async def fetch(_worker):
+            async with httpx.AsyncClient(
+                timeout=30,
+                follow_redirects=True,
+                headers={
+                    "User-Agent": (
+                        "StudentPlacementPlanner/0.1 "
+                        "(+https://github.com/nklisch/student-placement-planner)"
+                    )
+                },
+            ) as client:
+                return await fetch_geofabrik_regions(client)
+
+        self._start(
+            "source-catalog",
+            fetch,
+            "Loading the OpenStreetMap region list from Geofabrik…",
+            cancellable=False,
+        )
+
+    def _prepare_selected_region(self) -> None:
+        region = self.region_combo.currentData()
+        if not isinstance(region, GeofabrikRegion) or self._worker is not None:
+            return
+        answer = QMessageBox.question(
+            self,
+            "Prepare offline region?",
+            f"Download {region.name} directly from Geofabrik and prepare it on this "
+            "computer? Larger regions can need several times the download size and may "
+            "take a while.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer is not QMessageBox.StandardButton.Yes:
+            return
+
+        async def prepare(worker):
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(None, connect=30),
+                follow_redirects=True,
+                headers={
+                    "User-Agent": (
+                        "StudentPlacementPlanner/0.1 "
+                        "(+https://github.com/nklisch/student-placement-planner)"
+                    )
+                },
+            ) as client:
+                return await prepare_geofabrik_region(
+                    region,
+                    self._store,
+                    client,
+                    progress=worker.report_progress,
+                    cancelled=lambda: worker.is_cancel_requested,
+                )
+
+        self._start(
+            "source-install",
+            prepare,
+            f"Downloading {region.name} directly from Geofabrik…",
+            cancellable=True,
+        )
 
     def refresh_catalog(self) -> None:
         if self._worker is not None:
@@ -262,12 +376,24 @@ class MapPackDialog(QDialog):
         self._worker.start()
 
     def _operation_succeeded(self, result: object) -> None:
-        if self._operation == "catalog" and isinstance(result, MapPackCatalog):
+        if (
+            self._operation == "source-catalog"
+            and isinstance(result, tuple)
+            and all(isinstance(region, GeofabrikRegion) for region in result)
+        ):
+            self._regions = result
+            self.status_label.setText(
+                f"{len(result)} OpenStreetMap region(s) are available directly from Geofabrik."
+            )
+        elif self._operation == "catalog" and isinstance(result, MapPackCatalog):
             self._catalog = result
             self.status_label.setText(
                 f"{len(result.packs)} region(s) available to download."
                 if result.packs
-                else "No downloadable regions are published yet. You can still install a pack file."
+                else (
+                    "No ready-made regions are published. Use the direct OpenStreetMap "
+                    "option below."
+                )
             )
         elif isinstance(result, InstalledMapPack):
             if result.compatible:
@@ -287,13 +413,22 @@ class MapPackDialog(QDialog):
             self.status_label.setText(message)
 
     def _operation_cancelled(self) -> None:
-        self.status_label.setText("Download paused. Start it again later to resume.")
+        if self._operation == "source-install":
+            self.status_label.setText(
+                "Preparation cancelled. A partial download was kept so you can resume later."
+            )
+        else:
+            self.status_label.setText("Download paused. Start it again later to resume.")
 
     def _operation_progress(self, completed: int, total: int, message: str) -> None:
         self.status_label.setText(message)
-        self.progress.setRange(0, max(total, 1))
-        self.progress.setValue(min(completed, max(total, 1)))
-        self.progress.setFormat(f"{_format_size(completed)} of {_format_size(total)}")
+        if total <= 0:
+            self.progress.setRange(0, 0)
+            self.progress.setFormat("")
+        else:
+            self.progress.setRange(0, total)
+            self.progress.setValue(min(completed, total))
+            self.progress.setFormat(f"{_format_size(completed)} of {_format_size(total)}")
 
     def _operation_finished(self) -> None:
         worker = self._worker
@@ -305,6 +440,7 @@ class MapPackDialog(QDialog):
         self.cancel_button.setEnabled(True)
         self._update_actions()
         self._render_catalog()
+        self._render_regions()
         self.operationFinished.emit()
         if self._close_when_done:
             self._close_when_done = False
@@ -330,6 +466,10 @@ class MapPackDialog(QDialog):
         self.import_button.setEnabled(idle)
         self.refresh_button.setEnabled(idle)
         self.download_button.setEnabled(idle and bool(self._catalog.packs))
+        self.refresh_regions_button.setEnabled(idle)
+        self.prepare_region_button.setEnabled(
+            idle and isinstance(self.region_combo.currentData(), GeofabrikRegion)
+        )
 
     def closeEvent(self, event) -> None:
         if self._worker is not None:

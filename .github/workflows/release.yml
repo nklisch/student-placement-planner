@@ -50,6 +50,10 @@ jobs:
       - name: Build self-contained application
         run: pyinstaller --clean --noconfirm packaging/student-placement-planner.spec
 
+      - name: Check bundled offline-region builder
+        shell: pwsh
+        run: '& "dist\Student Placement Planner\Student Placement Planner.exe" --self-test-offline-builder'
+
       - name: Prepare signing certificate
         shell: pwsh
         timeout-minutes: 2
@@ -188,6 +192,9 @@ jobs:
         run: |
           sh packaging/macos/build_icon.sh
           pyinstaller --clean --noconfirm packaging/student-placement-planner.spec
+
+      - name: Check bundled offline-region builder
+        run: '"dist/Student Placement Planner.app/Contents/MacOS/Student Placement Planner" --self-test-offline-builder'
 
       - name: Import Developer ID certificate when configured
         if: env.MACOS_CERTIFICATE_BASE64 != ''

@@ -88,7 +88,7 @@ First vertical slice and permanent privacy fallback. Users can paste or import `
 
 ### Online provider
 
-Addresses are geocoded and coordinates are sent for matrix routing. Provider request types contain only address or coordinate values. Requests are batched, cancellation-aware, and errors preserve the project session. The initial adapter is Google Maps because it is familiar and requested; the provider boundary remains vendor-neutral.
+Addresses are geocoded and coordinates are sent for matrix routing. Provider request types contain only address or coordinate values. Requests are batched, cancellation-aware, and errors preserve the project session. Users can choose shared Nominatim/OSRM services without a key for occasional use, a free-account openrouteservice key, or Google Maps. The provider boundary remains vendor-neutral.
 
 ### Offline regional pack
 
@@ -98,7 +98,7 @@ A downloadable pack contains:
 - A SQLite FTS address index built from the same OpenStreetMap extract.
 - Region name, data date, engine compatibility version, size, and corruption checksum.
 
-The application downloads prepared packs; users never import raw OSM data. Missing coverage offers manual coordinates or online lookup. Incompatible/corrupt packs disable offline routing for that region without preventing application startup.
+The application normally downloads a raw regional extract directly from Geofabrik and prepares the routing tiles and address index locally. No project-hosted catalog or Python installation is required. Optional ready-made packs remain supported for small or externally hosted regions. Missing coverage offers manual coordinates or online lookup. Incompatible/corrupt packs disable offline routing for that region without preventing application startup.
 
 ## 5. Desktop interaction design
 
@@ -122,7 +122,7 @@ UI design and implementation follow the restricted model roles in `docs/BUILD_IN
 
 - [x] Pure typed domain and independent exact capacity solver.
 - [x] Provider-neutral travel interfaces.
-- [x] Initial manual, OSRM/Nominatim development, and Google adapters.
+- [x] Manual, no-key Nominatim/OSRM, openrouteservice, and Google adapters.
 - [x] Install development dependencies in a supported Python 3.12 environment.
 - [x] Run and repair foundation tests.
 - [x] Replace provisional stack metadata with desktop dependencies and module layout.
@@ -168,6 +168,7 @@ UI design and implementation follow the restricted model roles in `docs/BUILD_IN
 - [x] Implement pyvalhalla matrix adapter behind lazy optional loading.
 - [x] Define/build a small test regional pack and SQLite address index.
 - [x] Add pack manager with resumable download, progress, compatibility check, retry, and last-working-pack retention.
+- [x] Add direct Geofabrik region selection and on-device preparation so map hosting is optional.
 - [x] Add offline geocoding review and coordinate override.
 - [x] Test offline mode with network access blocked.
 

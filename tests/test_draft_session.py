@@ -205,6 +205,20 @@ def test_calculated_matrix_must_match_selected_provider_mode() -> None:
     session.set_travel_mode(TravelMode.GOOGLE)
     assert not session.calculated_travel_is_stale
 
+    session.set_travel_mode(TravelMode.COMMUNITY)
+    assert session.calculated_travel_is_stale
+    session.set_calculated_matrix(
+        TravelMatrix(matrix.distances_meters, matrix.durations_seconds, "community_osrm")
+    )
+    assert not session.calculated_travel_is_stale
+
+    session.set_travel_mode(TravelMode.OPENROUTESERVICE)
+    assert session.calculated_travel_is_stale
+    session.set_calculated_matrix(
+        TravelMatrix(matrix.distances_meters, matrix.durations_seconds, "openrouteservice")
+    )
+    assert not session.calculated_travel_is_stale
+
 
 def test_manual_override_marks_provider_matrix_stale_and_recalculation_clears_old_distance() -> (
     None

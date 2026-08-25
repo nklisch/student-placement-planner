@@ -2,12 +2,34 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from importlib.resources import as_file, files
 from pathlib import Path
 
 
+def _offline_builder_self_test() -> int:
+    try:
+        import osmium  # noqa: F401
+        import valhalla
+
+        suffix = ".exe" if sys.platform == "win32" else ""
+        builder = Path(valhalla.__file__).resolve().parent / "bin" / f"valhalla_build_tiles{suffix}"
+        result = subprocess.run(
+            [str(builder), "--help"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            check=False,
+        )
+    except (ImportError, OSError, subprocess.SubprocessError):
+        return 1
+    return 0 if result.returncode == 0 else 1
+
+
 def main() -> int:
+    if "--self-test-offline-builder" in sys.argv:
+        return _offline_builder_self_test()
     from PySide6.QtCore import QTimer
     from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication
