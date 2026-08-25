@@ -27,9 +27,24 @@ def _offline_builder_self_test() -> int:
     return 0 if result.returncode == 0 else 1
 
 
+def _optimization_self_test() -> int:
+    try:
+        from ortools.sat.python import cp_model
+
+        model = cp_model.CpModel()
+        value = model.new_bool_var("runtime_check")
+        model.add(value == 1)
+        result = cp_model.CpSolver().solve(model)
+    except (ImportError, OSError, RuntimeError):
+        return 1
+    return 0 if result in (cp_model.OPTIMAL, cp_model.FEASIBLE) else 1
+
+
 def main() -> int:
     if "--self-test-offline-builder" in sys.argv:
         return _offline_builder_self_test()
+    if "--self-test-optimization" in sys.argv:
+        return _optimization_self_test()
     from PySide6.QtCore import QTimer
     from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication

@@ -14,6 +14,7 @@ ROOT = Path(SPECPATH).resolve().parent
 offline_datas = []
 offline_binaries = []
 offline_hidden = []
+platform_binaries = []
 valhalla_spec = importlib.util.find_spec("valhalla")
 if valhalla_spec is not None and valhalla_spec.origin is not None:
     valhalla_dir = Path(valhalla_spec.origin).parent
@@ -35,6 +36,32 @@ if importlib.util.find_spec("osmium") is not None:
     offline_binaries.extend(package_binaries)
     offline_hidden.extend(package_hidden)
 
+if sys.platform == "win32":
+    # OR-Tools' native CP-SAT module links against the VC143 C++ runtime. PyInstaller
+    # intentionally treats that runtime as a system library, but clean Windows PCs do
+    # not necessarily have it. Use Microsoft's supported app-local deployment files.
+    runtime_names = ("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")
+    runtime_candidates = []
+    redist_root = os.environ.get("VCToolsRedistDir")
+    if redist_root:
+        runtime_candidates.append(Path(redist_root) / "x64" / "Microsoft.VC143.CRT")
+    program_files = Path(os.environ.get("ProgramFiles", "C:/Program Files"))
+    visual_studio = program_files / "Microsoft Visual Studio" / "2022"
+    runtime_candidates.extend(
+        visual_studio.glob("*/VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT")
+    )
+    runtime_dir = next(
+        (
+            candidate
+            for candidate in sorted(runtime_candidates, key=str, reverse=True)
+            if all((candidate / name).is_file() for name in runtime_names)
+        ),
+        None,
+    )
+    if runtime_dir is None:
+        raise RuntimeError("Microsoft VC143 x64 app-local runtime files were not found")
+    platform_binaries.extend((str(runtime_dir / name), ".") for name in runtime_names)
+
 datas = [
     (str(ROOT / "src/placement_optimizer/assets"), "placement_optimizer/assets"),
     (str(ROOT / "LICENSE"), "."),
@@ -50,7 +77,7 @@ if sys.platform == "darwin":
 analysis = Analysis(
     [str(ROOT / "src/placement_optimizer/__main__.py")],
     pathex=[str(ROOT / "src")],
-    binaries=offline_binaries,
+    binaries=[*offline_binaries, *platform_binaries],
     datas=datas,
     hiddenimports=offline_hidden,
     hookspath=[],

@@ -50,9 +50,19 @@ jobs:
       - name: Build self-contained application
         run: pyinstaller --clean --noconfirm packaging/student-placement-planner.spec
 
-      - name: Check bundled offline-region builder
+      - name: Check bundled native dependencies
         shell: pwsh
-        run: '& "dist\Student Placement Planner\Student Placement Planner.exe" --self-test-offline-builder'
+        run: |
+          $appDir = "dist\Student Placement Planner"
+          foreach ($runtime in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
+            if (-not (Test-Path "$appDir\_internal\$runtime")) {
+              throw "Bundled native runtime is missing: $runtime"
+            }
+          }
+          & "$appDir\Student Placement Planner.exe" --self-test-optimization
+          if ($LASTEXITCODE -ne 0) { throw "Bundled OR-Tools runtime check failed" }
+          & "$appDir\Student Placement Planner.exe" --self-test-offline-builder
+          if ($LASTEXITCODE -ne 0) { throw "Bundled offline-region builder check failed" }
 
       - name: Prepare signing certificate
         shell: pwsh
@@ -143,6 +153,8 @@ jobs:
           $arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=`"$installDir`""
           $install = Start-Process $installer -ArgumentList $arguments -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
+          & "$installDir\Student Placement Planner.exe" --self-test-optimization
+          if ($LASTEXITCODE -ne 0) { throw "Installed OR-Tools runtime check failed" }
           $env:QT_QPA_PLATFORM = "offscreen"
           $app = Start-Process "$installDir\Student Placement Planner.exe" -PassThru
           Start-Sleep -Seconds 4
@@ -198,8 +210,11 @@ jobs:
           sh packaging/macos/build_icon.sh
           pyinstaller --clean --noconfirm packaging/student-placement-planner.spec
 
-      - name: Check bundled offline-region builder
-        run: '"dist/Student Placement Planner.app/Contents/MacOS/Student Placement Planner" --self-test-offline-builder'
+      - name: Check bundled native dependencies
+        run: |
+          APP="dist/Student Placement Planner.app/Contents/MacOS/Student Placement Planner"
+          "$APP" --self-test-optimization
+          "$APP" --self-test-offline-builder
 
       - name: Import Developer ID certificate when configured
         if: env.MACOS_CERTIFICATE_BASE64 != ''
@@ -253,6 +268,7 @@ jobs:
           MOUNT="$RUNNER_TEMP/spp-mount"
           mkdir -p "$MOUNT"
           hdiutil attach "$DMG" -mountpoint "$MOUNT" -nobrowse
+          "$MOUNT/Student Placement Planner.app/Contents/MacOS/Student Placement Planner" --self-test-optimization
           QT_QPA_PLATFORM=offscreen "$MOUNT/Student Placement Planner.app/Contents/MacOS/Student Placement Planner" &
           APP_PID=$!
           sleep 4
