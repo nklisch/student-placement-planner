@@ -12,9 +12,9 @@ It is designed as a calm, spreadsheet-friendly tool for school staff:
 
 ## Project status
 
-The manual travel-time workflow and desktop interface are complete and tested. Google Maps integration, downloadable offline map packs, and native Windows/macOS installers are under active development.
+The manual, Google Maps, and downloadable offline-map workflows are implemented and tested. Native Windows and macOS packaging is now the remaining release phase.
 
-The first public beta will be distributed through [GitHub Releases](https://github.com/nklisch/student-placement-planner/releases) as a normal Windows installer and signed macOS disk image. End users will not need Python or a terminal.
+There is no public installer yet. The first beta will be distributed through [GitHub Releases](https://github.com/nklisch/student-placement-planner/releases) as a normal Windows installer and macOS disk image. End users will not need Python or a terminal.
 
 ## Developer setup
 
@@ -33,7 +33,13 @@ Run the desktop application with:
 .venv/bin/python -m placement_optimizer
 ```
 
-See [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) for the staged build plan and [`docs/BUILD_INSTRUCTIONS.md`](docs/BUILD_INSTRUCTIONS.md) for durable product requirements.
+Useful project pages:
+
+- [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
+- [Google Maps setup](docs/GOOGLE_MAPS_SETUP.md)
+- [Offline map packs](docs/MAP_PACKS.md)
+- [Product and build requirements](docs/BUILD_INSTRUCTIONS.md)
+- [Desktop interface specification](docs/UI_SPECIFICATION.md)
 
 ## License
 

@@ -190,6 +190,22 @@ def test_draft_loader_accepts_earlier_valid_project_files(tmp_path) -> None:
     assert restored.build_project().project == project
 
 
+def test_calculated_matrix_must_match_selected_provider_mode() -> None:
+    session = ready_session()
+    matrix = session.build_project().project.travel_matrix
+    session.set_travel_mode(TravelMode.GOOGLE)
+    session.set_calculated_matrix(
+        TravelMatrix(matrix.distances_meters, matrix.durations_seconds, "google_routes")
+    )
+    assert not session.calculated_travel_is_stale
+
+    session.set_travel_mode(TravelMode.OFFLINE)
+    assert session.calculated_travel_is_stale
+
+    session.set_travel_mode(TravelMode.GOOGLE)
+    assert not session.calculated_travel_is_stale
+
+
 def test_project_round_trip_populates_editable_manual_grid() -> None:
     original = ready_session().build_project().project
     assert original is not None

@@ -7,6 +7,7 @@ local backend and are not included in errors or responses.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from collections.abc import Sequence
 from contextlib import suppress
@@ -38,13 +39,22 @@ class GoogleGeocoder:
         if response is None:
             raise TravelDataError("Google Maps geocoding could not be reached")
         if response.status_code != 200:
-            raise TravelDataError(f"Google Maps geocoding returned HTTP {response.status_code}")
+            raise TravelDataError(_google_http_message("Google Maps geocoding", response))
         try:
             payload = response.json()
             if payload.get("status") != "OK":
                 status = payload.get("status", "UNKNOWN")
                 if status == "ZERO_RESULTS":
                     raise TravelDataError(f"address was not found: {address}")
+                if status in {"OVER_QUERY_LIMIT", "OVER_DAILY_LIMIT"}:
+                    raise TravelDataError(
+                        "Google Maps geocoding quota was reached; wait and try again"
+                    )
+                if status in {"REQUEST_DENIED", "INVALID_REQUEST"}:
+                    raise TravelDataError(
+                        "Google Maps geocoding rejected the request; check the API key, "
+                        "enabled APIs, and billing"
+                    )
                 raise TravelDataError(f"Google Maps geocoding failed with status {status}")
             first = payload["results"][0]
             location = first["geometry"]["location"]
@@ -140,8 +150,10 @@ class GoogleRoutesMatrix:
             )
         if response is None:
             raise TravelDataError("Google Routes could not be reached")
+        if response.status_code in {429, 500, 502, 503, 504}:
+            response = await self._retry_route_request(body, response)
         if response.status_code != 200:
-            raise TravelDataError(f"Google Routes returned HTTP {response.status_code}")
+            raise TravelDataError(_google_http_message("Google Routes", response))
         try:
             elements = response.json()
         except ValueError as error:
@@ -170,6 +182,47 @@ class GoogleRoutesMatrix:
             except (KeyError, TypeError, ValueError) as error:
                 raise TravelDataError("Google Routes returned an invalid matrix element") from error
         return distances, durations
+
+    async def _retry_route_request(
+        self,
+        body: dict[str, object],
+        response: httpx.Response,
+    ) -> httpx.Response:
+        for attempt in range(2):
+            retry_after = response.headers.get("Retry-After", "")
+            try:
+                delay = min(max(float(retry_after), 0.0), 60.0)
+            except ValueError:
+                delay = float(2**attempt)
+            await asyncio.sleep(delay)
+            next_response: httpx.Response | None = None
+            with suppress(httpx.HTTPError):
+                next_response = await self._client.post(
+                    "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix",
+                    json=body,
+                    headers={
+                        "X-Goog-Api-Key": self._api_key,
+                        "X-Goog-FieldMask": (
+                            "originIndex,destinationIndex,distanceMeters,duration,status,condition"
+                        ),
+                    },
+                )
+            if next_response is None:
+                raise TravelDataError("Google Routes could not be reached")
+            response = next_response
+            if response.status_code not in {429, 500, 502, 503, 504}:
+                break
+        return response
+
+
+def _google_http_message(service: str, response: httpx.Response) -> str:
+    if response.status_code in {401, 403}:
+        return f"{service} rejected the request; check the API key, enabled APIs, and billing"
+    if response.status_code == 429:
+        return f"{service} quota was reached; wait and try again"
+    if 500 <= response.status_code < 600:
+        return f"{service} is temporarily unavailable; try again"
+    return f"{service} returned HTTP {response.status_code}"
 
 
 def _waypoint(coordinate: Coordinate) -> dict[str, object]:

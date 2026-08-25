@@ -37,6 +37,7 @@ RESULT_HEADER_HELP = {
     "Student": "The student who was assigned.",
     "Placement": "The location assigned to the student.",
     "Drive": "Driving time for this assignment.",
+    "Distance": "Road distance for this assignment, when the travel source provides it.",
     "Choice": "The assigned location's rank in this student's choices.",
     "Changed": "Whether this differs from the previous placement supplied for the student.",
     "Location": "The placement location.",
@@ -51,6 +52,12 @@ def format_drive(seconds: int | None) -> str:
         return f"{minutes} min"
     hours, rest = divmod(minutes, 60)
     return f"{hours} h {rest} min" if rest else f"{hours} h"
+
+
+def format_distance(meters: int | None) -> str:
+    if meters is None:
+        return "—"
+    return f"{meters / 1000:.1f} km"
 
 
 def _ordinal(rank: int) -> str:
@@ -334,6 +341,9 @@ class ResultsPage(QWidget):
         location_names = {location.id: location.name for location in project.locations}
         has_choices = bool(project.rules.preferences)
         has_prior = bool(project.rules.prior_assignments)
+        has_distances = any(
+            placement.distance_meters is not None for placement in result.placements
+        )
 
         # Stats
         self.stat_longest.set_value(format_drive(result.maximum_commute_seconds))
@@ -353,6 +363,8 @@ class ResultsPage(QWidget):
 
         # By-student table; unassigned students sort first.
         headers = ["Student", "Placement", "Drive"]
+        if has_distances:
+            headers.append("Distance")
         if has_choices:
             headers.append("Choice")
         if has_prior:
@@ -372,6 +384,8 @@ class ResultsPage(QWidget):
                 ),
                 format_drive(placement.duration_seconds),
             ]
+            if has_distances:
+                row.append(format_distance(placement.distance_meters))
             if has_choices:
                 row.append(
                     _ordinal(placement.preference_rank)
@@ -392,18 +406,23 @@ class ResultsPage(QWidget):
                 placement for placement in result.placements if placement.location_id == location.id
             ]
             if not members:
-                location_rows.append((location.name, "—", ""))
+                row = [location.name, "—", ""]
+                if has_distances:
+                    row.append("")
+                location_rows.append(tuple(row))
             for placement in members:
-                location_rows.append(
-                    (
-                        location.name,
-                        student_names.get(placement.student_id, placement.student_id),
-                        format_drive(placement.duration_seconds),
-                    )
-                )
-        self.location_table.setModel(
-            ReadOnlyTableModel(["Location", "Student", "Drive"], location_rows)
-        )
+                row = [
+                    location.name,
+                    student_names.get(placement.student_id, placement.student_id),
+                    format_drive(placement.duration_seconds),
+                ]
+                if has_distances:
+                    row.append(format_distance(placement.distance_meters))
+                location_rows.append(tuple(row))
+        location_headers = ["Location", "Student", "Drive"]
+        if has_distances:
+            location_headers.append("Distance")
+        self.location_table.setModel(ReadOnlyTableModel(location_headers, location_rows))
         self.location_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
         # Capacity panel with restrained bars and numeric text.

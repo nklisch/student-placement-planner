@@ -176,13 +176,13 @@ Adding/removing students or locations preserves all unaffected cells and introdu
 
 `Download a map of your region once, then it works with no internet. Nothing is sent anywhere.`
 
-Phase D may show a clean not-yet-configured panel. Phase E adds prepared-pack listing, download/resume/cancel, compatible installed-pack state, local calculation, and pack repair. A missing, corrupt, or incompatible pack disables only offline mode and offers redownload or another travel mode.
+The panel lists the selected installed region and opens a map-pack manager for prepared-pack listing, resumable download/cancel, local file installation, compatibility status, integrity checks, and pack repair. Address matches are reviewed before local Valhalla calculation. A missing, corrupt, or incompatible pack disables only offline mode and offers another pack or travel mode.
 
 ### Online maps (Google)
 
 `Addresses are sent to Google to get driving times. Names and choices are never sent.`
 
-Phase D may show a clean provider-setup panel. Phase E adds API-key entry, test connection, calculation, cancellation, address review, and failure recovery.
+The panel provides in-memory API-key entry, a connection test for both required Google APIs, address review with coordinate correction, cancellable calculation, and inline failure recovery. The API key is never stored in the project or diagnostics.
 
 Required full disclosure:
 
@@ -224,6 +224,7 @@ Assignment columns:
 - Student
 - Placement
 - Drive
+- Distance only when the selected travel source provides road distance
 - Choice only when choices exist
 - Changed only when prior assignments exist
 

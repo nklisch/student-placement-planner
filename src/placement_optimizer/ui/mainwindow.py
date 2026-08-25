@@ -77,7 +77,7 @@ _MORE_OPTIONS_LABEL = "More options…"
 
 def app_version() -> str:
     try:
-        return metadata.version("student-placement-optimizer")
+        return metadata.version("student-placement-planner")
     except metadata.PackageNotFoundError:
         return "0.1.0"
 
@@ -173,7 +173,7 @@ class MainWindow(QMainWindow):
         self._pending_model_version = -1
         self._is_cancelling = False
         self._close_after_worker = False
-        self._close_after_imports = False
+        self._close_after_background = False
         self._last_detail = ""
         self._help_center: HelpCenterDialog | None = None
         self._walkthrough: GuidedWalkthroughDialog | None = None
@@ -805,6 +805,8 @@ class MainWindow(QMainWindow):
         results_page = self.pages[4]
         if not results_page.has_usable_result():
             return
+        from html import escape
+
         from PySide6.QtGui import QTextDocument
         from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 
@@ -812,25 +814,42 @@ class MainWindow(QMainWindow):
         project = results_page.project
         student_names = {student.id: student.name for student in project.students}
         location_names = {location.id: location.name for location in project.locations}
-        rows = "".join(
-            "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(
-                student_names.get(p.student_id, p.student_id),
+        has_distances = any(
+            placement.distance_meters is not None for placement in outcome.result.placements
+        )
+        rendered_rows = []
+        for placement in outcome.result.placements:
+            values = [
+                student_names.get(placement.student_id, placement.student_id),
                 (
-                    location_names.get(p.location_id or "", "Not placed")
-                    if p.location_id
+                    location_names.get(placement.location_id or "", "Not placed")
+                    if placement.location_id
                     else "Not placed"
                 ),
-                "—" if p.duration_seconds is None else f"{p.duration_seconds / 60:.0f} min",
+                (
+                    "—"
+                    if placement.duration_seconds is None
+                    else f"{placement.duration_seconds / 60:.0f} min"
+                ),
+            ]
+            if has_distances:
+                values.append(
+                    "—"
+                    if placement.distance_meters is None
+                    else f"{placement.distance_meters / 1000:.1f} km"
+                )
+            rendered_rows.append(
+                "<tr>" + "".join(f"<td>{escape(value)}</td>" for value in values) + "</tr>"
             )
-            for p in outcome.result.placements
-        )
+        rows = "".join(rendered_rows)
+        distance_header = "<th align='left'>Distance</th>" if has_distances else ""
         document = QTextDocument()
         document.setHtml(
-            f"<h2>{project.name} — Placements</h2>"
-            f"<p>{outcome.message}</p>"
+            f"<h2>{escape(project.name)} — Placements</h2>"
+            f"<p>{escape(outcome.message)}</p>"
             "<table border='0' cellspacing='6'>"
             "<tr><th align='left'>Student</th><th align='left'>Placement</th>"
-            "<th align='left'>Drive</th></tr>"
+            f"<th align='left'>Drive</th>{distance_header}</tr>"
             f"{rows}</table>"
         )
         printer = QPrinter(QPrinter.PrinterMode.HighResolution)
@@ -875,11 +894,12 @@ class MainWindow(QMainWindow):
             TravelMode.OFFLINE: "Offline map pack",
             TravelMode.GOOGLE: "Online maps (Google)",
         }
+        travel_page = self.pages[3]
         dialog = TroubleshootingDialog(
             app_version(),
             platform.platform(),
             mode_names.get(self.controller.session.travel_mode, "Enter times myself"),
-            "No offline map pack installed",
+            travel_page.pack_description(),
             self._last_detail,
             self,
         )
@@ -892,6 +912,9 @@ class MainWindow(QMainWindow):
 
     def show_toast(self, text: str, action_text: str = "", action=None) -> None:
         self.toast.show_message(text, action_text, action)
+
+    def set_last_detail(self, detail: str) -> None:
+        self._last_detail = detail
 
     def ask_open_csv(self, parent: QWidget) -> str | None:
         from PySide6.QtWidgets import QFileDialog
@@ -1002,24 +1025,27 @@ class MainWindow(QMainWindow):
     def _remember_directory(self, path: str) -> None:
         self._settings.setValue("ui/lastDirectory", str(Path(path).parent))
 
-    def _active_import_pages(self) -> list[QWidget]:
+    def _active_background_pages(self) -> list[QWidget]:
         return [
             page
             for page in self.pages
-            if hasattr(page, "has_active_import") and page.has_active_import()
+            if (
+                (hasattr(page, "has_active_import") and page.has_active_import())
+                or (hasattr(page, "has_active_operation") and page.has_active_operation())
+            )
         ]
 
-    def import_worker_finished(self) -> None:
-        if self._close_after_imports and not self._active_import_pages():
-            self._close_after_imports = False
+    def background_worker_finished(self) -> None:
+        if self._close_after_background and not self._active_background_pages():
+            self._close_after_background = False
             QTimer.singleShot(0, self.close)
 
     def _session_change_blocked(self) -> bool:
         if self._worker is not None:
             self.show_toast("Cancel the current calculation and wait for it to finish first.")
             return True
-        if self._active_import_pages():
-            self.show_toast("Wait for the current import to finish first.")
+        if self._active_background_pages():
+            self.show_toast("Cancel or wait for the current background task first.")
             return True
         return False
 
@@ -1041,11 +1067,14 @@ class MainWindow(QMainWindow):
             self.cancel_solve()
             event.ignore()
             return
-        import_pages = self._active_import_pages()
-        if import_pages:
-            self._close_after_imports = True
-            for page in import_pages:
-                page.cancel_import()
+        background_pages = self._active_background_pages()
+        if background_pages:
+            self._close_after_background = True
+            for page in background_pages:
+                if hasattr(page, "cancel_import"):
+                    page.cancel_import()
+                if hasattr(page, "cancel_operation"):
+                    page.cancel_operation()
             event.ignore()
             return
         if self.maybe_close():

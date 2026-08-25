@@ -2,13 +2,83 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import asyncio
+from collections.abc import Awaitable, Callable
 from pathlib import Path
+from threading import Event, Lock
 
 from PySide6.QtCore import QObject, QThread, Signal
 
 from placement_optimizer.application import PlacementProject, SolveProjectOutcome, solve_project
 from placement_optimizer.optimization import OptimizationCancellation
+from placement_optimizer.travel import (
+    MapPackDownloadCancelled,
+    MapPackError,
+    TravelDataError,
+)
+
+AsyncTask = Callable[["AsyncOperationWorker"], Awaitable[object]]
+
+
+class AsyncOperationWorker(QThread):
+    """Run one cancellable provider or pack operation on its own event loop."""
+
+    succeeded = Signal(object)
+    failed = Signal(str)
+    cancelled_operation = Signal()
+    progress = Signal(int, int, str)
+
+    def __init__(self, task: AsyncTask, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._task_factory = task
+        self._cancel_requested = Event()
+        self._lock = Lock()
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._task: asyncio.Task | None = None
+
+    @property
+    def is_cancel_requested(self) -> bool:
+        return self._cancel_requested.is_set()
+
+    def report_progress(self, completed: int, total: int, message: str = "") -> None:
+        self.progress.emit(completed, total, message)
+
+    def cancel(self) -> None:
+        self._cancel_requested.set()
+        with self._lock:
+            loop = self._loop
+            task = self._task
+        if loop is not None and task is not None:
+            loop.call_soon_threadsafe(task.cancel)
+
+    def run(self) -> None:
+        asyncio.run(self._execute())
+
+    async def _execute(self) -> None:
+        loop = asyncio.get_running_loop()
+        task = asyncio.create_task(self._task_factory(self))
+        with self._lock:
+            self._loop = loop
+            self._task = task
+        if self._cancel_requested.is_set():
+            task.cancel()
+        try:
+            result = await task
+        except (asyncio.CancelledError, MapPackDownloadCancelled):
+            self.cancelled_operation.emit()
+        except (MapPackError, TravelDataError, ValueError) as error:
+            self.failed.emit(str(error))
+        except Exception:
+            self.failed.emit("That operation couldn't be completed. Try again or use another mode.")
+        else:
+            if self._cancel_requested.is_set():
+                self.cancelled_operation.emit()
+            else:
+                self.succeeded.emit(result)
+        finally:
+            with self._lock:
+                self._loop = None
+                self._task = None
 
 
 class CsvImportWorker(QThread):

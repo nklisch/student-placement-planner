@@ -200,8 +200,8 @@ class AboutDialog(QDialog):
         layout.addWidget(QLabel(f"Version {version}"))
         description = QLabel(
             "A small local utility that assigns students to placement locations, "
-            "respecting capacities and rules while keeping drives short. Your data "
-            "stays on this computer."
+            "respecting capacities and rules while keeping drives short. Project data "
+            "stays on this computer; Google Maps receives addresses only when you choose it."
         )
         description.setWordWrap(True)
         layout.addWidget(description)

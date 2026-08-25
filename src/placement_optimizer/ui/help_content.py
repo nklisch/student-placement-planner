@@ -172,8 +172,8 @@ HELP_TOPICS = (
                 "Imported CSV files are matched to your students and locations by their IDs. Use Export times… to produce a file in the exact format the import expects.",
             ),
             HelpEntry(
-                "Map modes",
-                "The map options aren't available in this version yet. Offline maps will calculate times on this computer; with online maps, Google receives only addresses or coordinates—never names, IDs, choices, or rules.",
+                "Using maps",
+                "Download an offline region once to find addresses and calculate times on this computer. With online maps, Google receives only addresses or coordinates—never names, IDs, choices, or rules. Both options let you review address matches before calculation.",
             ),
         ),
     ),

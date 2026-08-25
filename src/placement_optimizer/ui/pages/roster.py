@@ -245,7 +245,7 @@ class RosterPage(QWidget):
         self.import_button.setText("Import CSV…")
         if worker is not None:
             worker.deleteLater()
-        self._host.import_worker_finished()
+        self._host.background_worker_finished()
 
     def cancel_import(self) -> None:
         if self._import_worker is not None:

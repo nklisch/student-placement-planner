@@ -164,12 +164,12 @@ UI design and implementation follow the restricted model roles in `docs/BUILD_IN
 
 ### Phase E — Mapping modes
 
-- [ ] Harden Google batching, cancellation, address review, and privacy-shaped requests.
-- [ ] Implement pyvalhalla matrix adapter behind lazy optional loading.
-- [ ] Define/build a small test regional pack and SQLite address index.
-- [ ] Add pack manager with resumable download, progress, compatibility check, retry, and last-working-pack retention.
-- [ ] Add offline geocoding review and coordinate override.
-- [ ] Test offline mode with network access blocked.
+- [x] Harden Google batching, cancellation, address review, and privacy-shaped requests.
+- [x] Implement pyvalhalla matrix adapter behind lazy optional loading.
+- [x] Define/build a small test regional pack and SQLite address index.
+- [x] Add pack manager with resumable download, progress, compatibility check, retry, and last-working-pack retention.
+- [x] Add offline geocoding review and coordinate override.
+- [x] Test offline mode with network access blocked.
 
 **Gate:** online, offline-pack, and manual modes all feed the same solver workflow; losing one mode does not break the others or startup.
 

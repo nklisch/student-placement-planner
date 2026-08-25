@@ -3,7 +3,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from placement_optimizer.domain import Coordinate
+from placement_optimizer.application import TravelInput, TravelWorkflow
+from placement_optimizer.domain import Coordinate, Location, Student
 from placement_optimizer.travel import GoogleGeocoder, GoogleRoutesMatrix, TravelDataError
 
 
@@ -103,6 +104,106 @@ async def test_google_transport_errors_do_not_retain_api_keys(provider_kind: str
     while error is not None:
         assert api_key not in repr(error)
         error = error.__cause__ or error.__context__
+
+
+async def test_google_workflow_sends_addresses_and_coordinates_but_not_names_or_ids() -> None:
+    requests: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if "geocode" in request.url.path:
+            address = request.url.params["address"]
+            return httpx.Response(
+                200,
+                json={
+                    "status": "OK",
+                    "results": [
+                        {
+                            "formatted_address": f"Matched {address}",
+                            "geometry": {"location": {"lat": 51.5, "lng": -0.12}},
+                        }
+                    ],
+                },
+            )
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "originIndex": 0,
+                    "destinationIndex": 0,
+                    "condition": "ROUTE_EXISTS",
+                    "distanceMeters": 1200,
+                    "duration": "180s",
+                    "status": {},
+                }
+            ],
+        )
+
+    transport = httpx.MockTransport(handle)
+    workflow = TravelWorkflow(lambda: httpx.AsyncClient(transport=transport, follow_redirects=True))
+    travel_input = TravelInput(
+        (Student("secret-student-id", "Alice Private", "1 Home Road"),),
+        (Location("secret-location-id", "Clinic Private", 1, "2 Work Road"),),
+        1,
+    )
+
+    review = await workflow.review_google(travel_input, "secret-key")
+    matrix = await workflow.calculate_google(review, "secret-key")
+
+    assert matrix.distances_meters == ((1200,),)
+    wire_text = "\n".join(
+        f"{request.url}\n{request.content.decode(errors='ignore')}" for request in requests
+    )
+    assert "Alice Private" not in wire_text
+    assert "Clinic Private" not in wire_text
+    assert "secret-student-id" not in wire_text
+    assert "secret-location-id" not in wire_text
+    assert "1+Home+Road" in wire_text or "1%20Home%20Road" in wire_text
+
+
+async def test_google_routes_retries_quota_response_then_recovers() -> None:
+    calls = 0
+
+    def handle(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "originIndex": 0,
+                    "destinationIndex": 0,
+                    "condition": "ROUTE_EXISTS",
+                    "distanceMeters": 1000,
+                    "duration": "100s",
+                }
+            ],
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        matrix = await GoogleRoutesMatrix("secret", client).route_matrix(
+            (Coordinate(51, -1),),
+            (Coordinate(52, -2),),
+        )
+
+    assert calls == 2
+    assert matrix.durations_seconds == ((100,),)
+
+
+async def test_google_routes_permission_error_is_actionable_and_key_safe() -> None:
+    def handle(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403, json={"error": {"message": "denied"}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        with pytest.raises(TravelDataError, match="enabled APIs, and billing") as caught:
+            await GoogleRoutesMatrix("secret", client).route_matrix(
+                (Coordinate(51, -1),),
+                (Coordinate(52, -2),),
+            )
+
+    assert "secret" not in repr(caught.value)
 
 
 async def test_google_routes_rejects_non_finite_distance() -> None:

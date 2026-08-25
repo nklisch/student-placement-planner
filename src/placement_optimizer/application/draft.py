@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
-from placement_optimizer.application.models import PlacementProject
+from placement_optimizer.application.models import PlacementProject, TravelInput
 from placement_optimizer.domain import Coordinate, Location, Student
 from placement_optimizer.optimization import (
     AssignmentRules,
@@ -195,10 +195,15 @@ class DraftSession:
 
     @property
     def calculated_travel_is_stale(self) -> bool:
-        return (
-            self.calculated_matrix is not None
-            and self._calculated_travel_version != self.travel_input_version
+        if self.calculated_matrix is None:
+            return False
+        version_changed = self._calculated_travel_version != self.travel_input_version
+        source = self.calculated_matrix.source
+        mode_changed = (self.travel_mode is TravelMode.GOOGLE and source != "google_routes") or (
+            self.travel_mode is TravelMode.OFFLINE
+            and not source.startswith(("valhalla:", "local_osrm"))
         )
+        return version_changed or mode_changed
 
     def set_name(self, name: str) -> None:
         if name != self.name:
@@ -373,6 +378,16 @@ class DraftSession:
 
     def readiness(self) -> DraftReadiness:
         return self.build_project().readiness
+
+    def build_travel_input(self) -> TravelInput | None:
+        """Return validated roster data for an off-thread provider operation."""
+
+        issues: list[DraftIssue] = []
+        students = self._validated_students(issues)
+        locations = self._validated_locations(issues)
+        if not students or not locations or issues:
+            return None
+        return TravelInput(students, locations, self.travel_input_version)
 
     def build_project(self) -> DraftBuildResult:
         issues: list[DraftIssue] = []

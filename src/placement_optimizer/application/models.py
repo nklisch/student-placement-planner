@@ -15,6 +15,13 @@ from placement_optimizer.travel import TravelMatrix
 
 
 @dataclass(frozen=True, slots=True)
+class TravelInput:
+    students: tuple[Student, ...]
+    locations: tuple[Location, ...]
+    input_version: int
+
+
+@dataclass(frozen=True, slots=True)
 class PlacementProject:
     name: str = "Untitled placement"
     students: tuple[Student, ...] = ()

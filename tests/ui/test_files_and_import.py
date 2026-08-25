@@ -149,7 +149,7 @@ def test_close_waits_for_active_import_worker(window, qtbot, tmp_path, monkeypat
     assert started.wait(2)
 
     window.close()
-    assert window._close_after_imports
+    assert window._close_after_background
     assert window.isVisible()
     release.set()
 

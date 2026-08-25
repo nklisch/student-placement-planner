@@ -27,7 +27,8 @@ def controller() -> SessionController:
 
 
 @pytest.fixture
-def window(qtbot) -> MainWindow:
+def window(qtbot, tmp_path, monkeypatch) -> MainWindow:
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
     main_window = MainWindow()
     # Tests routinely leave the draft modified; never block on the
     # unsaved-changes prompt (qtbot closes widgets before fixture teardown).

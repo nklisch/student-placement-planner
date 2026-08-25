@@ -10,7 +10,7 @@ to the grid.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, QObject, Qt
 from PySide6.QtGui import QColor, QGuiApplication
 from PySide6.QtWidgets import QApplication
 
@@ -74,7 +74,7 @@ class RosterTableModel(QAbstractTableModel):
     GHOST_HINT = "Type to add a row."
     ID_COLUMN = 1
 
-    def __init__(self, controller: SessionController, parent: QAbstractTableModel | None = None):
+    def __init__(self, controller: SessionController, parent: QObject | None = None):
         super().__init__(parent)
         self._controller = controller
         self.undo = SnapshotUndo(
@@ -329,7 +329,7 @@ class ManualTimesModel(QAbstractTableModel):
     what is valid. Blank means "not filled yet", ``x`` means no route.
     """
 
-    def __init__(self, controller: SessionController, parent: QAbstractTableModel | None = None):
+    def __init__(self, controller: SessionController, parent: QObject | None = None):
         super().__init__(parent)
         self._controller = controller
         self.undo = SnapshotUndo(

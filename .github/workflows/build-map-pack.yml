@@ -1,0 +1,97 @@
+name: Build offline map pack
+
+on:
+  workflow_dispatch:
+    inputs:
+      pbf_url:
+        description: Direct URL to a regional .osm.pbf extract
+        required: true
+        type: string
+      pack_id:
+        description: Stable lowercase region ID
+        required: true
+        type: string
+      name:
+        description: Region name shown in the app
+        required: true
+        type: string
+      version:
+        description: Pack version, normally YYYY.MM
+        required: true
+        type: string
+      description:
+        description: Short region description
+        required: false
+        default: OpenStreetMap offline region
+        type: string
+      west:
+        description: Western longitude
+        required: true
+        type: string
+      south:
+        description: Southern latitude
+        required: true
+        type: string
+      east:
+        description: Eastern longitude
+        required: true
+        type: string
+      north:
+        description: Northern latitude
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install pack builder
+        run: python -m pip install '.[offline-maps,pack-build]'
+
+      - name: Download OpenStreetMap extract
+        env:
+          PBF_URL: ${{ inputs.pbf_url }}
+        run: curl --fail --location --retry 3 --output region.osm.pbf "$PBF_URL"
+
+      - name: Build regional pack
+        env:
+          PACK_ID: ${{ inputs.pack_id }}
+          PACK_NAME: ${{ inputs.name }}
+          PACK_VERSION: ${{ inputs.version }}
+          PACK_DESCRIPTION: ${{ inputs.description }}
+          WEST: ${{ inputs.west }}
+          SOUTH: ${{ inputs.south }}
+          EAST: ${{ inputs.east }}
+          NORTH: ${{ inputs.north }}
+        run: |
+          python tools/build_region_pack.py \
+            region.osm.pbf \
+            region.spp-map-pack \
+            --pack-id "$PACK_ID" \
+            --name "$PACK_NAME" \
+            --version "$PACK_VERSION" \
+            --description "$PACK_DESCRIPTION" \
+            --bounds "$WEST" "$SOUTH" "$EAST" "$NORTH" \
+            --work-dir pack-work
+          sha256sum region.spp-map-pack > SHA256SUMS
+
+      - name: Upload pack for catalog publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.pack_id }}-${{ inputs.version }}
+          path: |
+            region.spp-map-pack
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30

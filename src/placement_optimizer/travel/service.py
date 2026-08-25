@@ -3,15 +3,58 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from placement_optimizer.domain import Coordinate, Location, Student
 from placement_optimizer.travel.base import (
     Geocoder,
+    GeocodingResult,
     MatrixEntry,
     RouteMatrixProvider,
     TravelDataError,
     TravelMatrix,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedPlace:
+    item_id: str
+    name: str
+    entered_address: str
+    matched_address: str
+    coordinate: Coordinate
+
+
+@dataclass(frozen=True, slots=True)
+class TravelCoordinateReview:
+    students: tuple[ResolvedPlace, ...]
+    locations: tuple[ResolvedPlace, ...]
+
+
+async def resolve_travel_coordinates(
+    students: Sequence[Student],
+    locations: Sequence[Location],
+    geocoder: Geocoder,
+) -> TravelCoordinateReview:
+    """Resolve only address data so users can review matches before routing."""
+
+    cache: dict[str, GeocodingResult] = {}
+    return TravelCoordinateReview(
+        students=await _resolve_places(students, geocoder, cache),
+        locations=await _resolve_places(locations, geocoder, cache),
+    )
+
+
+async def route_reviewed_matrix(
+    review: TravelCoordinateReview,
+    router: RouteMatrixProvider,
+) -> TravelMatrix:
+    """Calculate a matrix from coordinates the user has already reviewed."""
+
+    return await router.route_matrix(
+        tuple(item.coordinate for item in review.students),
+        tuple(item.coordinate for item in review.locations),
+    )
 
 
 async def build_travel_matrix(
@@ -26,10 +69,8 @@ async def build_travel_matrix(
     to a geocoding provider more than once. Nothing is persisted after the call.
     """
 
-    cache: dict[str, Coordinate] = {}
-    student_coordinates = await _resolve_coordinates(students, geocoder, cache)
-    location_coordinates = await _resolve_coordinates(locations, geocoder, cache)
-    return await router.route_matrix(student_coordinates, location_coordinates)
+    review = await resolve_travel_coordinates(students, locations, geocoder)
+    return await route_reviewed_matrix(review, router)
 
 
 def matrix_from_entries(
@@ -79,17 +120,25 @@ def matrix_from_entries(
     )
 
 
-async def _resolve_coordinates(
+async def _resolve_places(
     places: Sequence[Student] | Sequence[Location],
     geocoder: Geocoder,
-    cache: dict[str, Coordinate],
-) -> tuple[Coordinate, ...]:
-    coordinates: list[Coordinate] = []
+    cache: dict[str, GeocodingResult],
+) -> tuple[ResolvedPlace, ...]:
+    resolved: list[ResolvedPlace] = []
     for place in places:
-        if place.coordinate is not None:
-            coordinates.append(place.coordinate)
-            continue
         address = (place.address or "").strip()
+        if place.coordinate is not None:
+            resolved.append(
+                ResolvedPlace(
+                    place.id,
+                    place.name,
+                    address,
+                    "Coordinates provided",
+                    place.coordinate,
+                )
+            )
+            continue
         if not address:
             raise TravelDataError(
                 "an address or latitude/longitude is required",
@@ -98,10 +147,19 @@ async def _resolve_coordinates(
         normalized = " ".join(address.casefold().split())
         if normalized not in cache:
             try:
-                cache[normalized] = (await geocoder.geocode(address)).coordinate
+                cache[normalized] = await geocoder.geocode(address)
             except TravelDataError as error:
                 if error.item_ids:
                     raise
                 raise TravelDataError(str(error), item_ids=(place.id,)) from error
-        coordinates.append(cache[normalized])
-    return tuple(coordinates)
+        result = cache[normalized]
+        resolved.append(
+            ResolvedPlace(
+                place.id,
+                place.name,
+                address,
+                result.display_name,
+                result.coordinate,
+            )
+        )
+    return tuple(resolved)

@@ -147,6 +147,26 @@ def test_choice_column_only_when_choices_exist(ready_window) -> None:
     assert "Choice" not in headers
 
 
+def test_road_distance_column_appears_when_provider_supplies_it(ready_window) -> None:
+    window = ready_window
+    project = window.controller.session.build_project().project
+    student = project.students[0]
+    location = project.locations[0]
+    outcome = SolveProjectOutcome(
+        OutcomeKind.SUCCESS,
+        "",
+        _result(placements=(Placement(student.id, location.id, 300, 1_250, None, False),)),
+    )
+
+    _show(window, outcome, project)
+
+    model = window.pages[4].student_table.model()
+    headers = [model.headerData(column, HORIZONTAL) for column in range(model.columnCount())]
+    assert "Distance" in headers
+    distance_column = headers.index("Distance")
+    assert model.index(0, distance_column).data() == "1.2 km"
+
+
 def test_over_target_warning_strip(ready_window) -> None:
     window = ready_window
     project = window.controller.session.build_project().project
