@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "student-placement-planner"
-version = "0.1.0b1"
+version = "0.1.0b2"
 description = "A local-first desktop utility for planning student placements"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

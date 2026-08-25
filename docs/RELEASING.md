@@ -17,8 +17,10 @@ Manual runs do not create a GitHub Release.
 1. Update `pyproject.toml` to the intended version.
 2. Run the complete local test and formatting gate.
 3. Push the commit and tag it, for example `v0.1.0b1`.
-4. The release workflow builds both platforms, creates GitHub build-provenance attestations, writes combined SHA-256 checksums, and creates a GitHub prerelease.
+4. The release workflow builds both platforms, verifies a packaged OR-Tools solve and the offline-region builder, creates GitHub build-provenance attestations, writes combined SHA-256 checksums, and creates a GitHub prerelease.
 5. Test both downloads on clean machines before promoting a release.
+
+The Windows build must contain the OR-Tools wheel's private native libraries and the Microsoft Visual C++ x64 runtime. The workflow checks those files explicitly, performs a minimal optimization from the packaged app, installs the result, and repeats the optimization from the installed copy.
 
 ## Preview signing and operating-system warnings
 
@@ -63,6 +65,7 @@ Linux can validate the shared PyInstaller graph even though Linux is not a relea
 ```bash
 python -m pip install '.[offline-maps,build]'
 pyinstaller --clean --noconfirm packaging/student-placement-planner.spec
+'dist/Student Placement Planner/Student Placement Planner' --self-test-optimization
 'dist/Student Placement Planner/Student Placement Planner' --self-test-offline-builder
 QT_QPA_PLATFORM=offscreen 'dist/Student Placement Planner/Student Placement Planner'
 ```

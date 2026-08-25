@@ -332,11 +332,11 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           cat > release-notes.md <<'EOF'
-          This is the first public beta of Student Placement Planner. It includes normal installers for Windows x64 and Apple-Silicon macOS; users do not need Python or a terminal.
+          Beta 2 corrects the Windows packaging problem in Beta 1. The Windows installer now carries the OR-Tools native libraries and Microsoft Visual C++ runtime it needs on a clean PC, and the release gate performs a packaged optimization before and after installation.
 
-          Highlights include spreadsheet entry and CSV import, capacity and placement rules, ordered placement goals, manual travel times, no-key community routing, openrouteservice and Google options, and offline OpenStreetMap regions downloaded directly from Geofabrik and prepared inside the app.
+          Student Placement Planner includes spreadsheet entry and CSV import, capacity and placement rules, ordered placement goals, manual travel times, no-key community routing, openrouteservice and Google options, and offline OpenStreetMap regions downloaded directly from Geofabrik and prepared inside the app.
 
-          **Preview signing:** unless the attached `SIGNING` files say otherwise, Windows uses a self-signed preview certificate and macOS uses an ad-hoc signature. Windows SmartScreen may require **More info → Run anyway**. On macOS, use **Control-click → Open** the first time. These warnings require paid/trusted platform credentials to remove; checksums and GitHub attestations are included so downloads can be verified.
+          Windows and macOS builds use preview signatures unless their attached `SIGNING` files say otherwise. Checksums and GitHub build attestations are included with the release.
           EOF
           gh release create "$TAG" release-artifacts/* \
             --repo "$GITHUB_REPOSITORY" \
