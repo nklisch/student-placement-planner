@@ -84,7 +84,7 @@ if sys.platform == "darwin":
                 {
                     "CFBundleTypeName": "Student Placement Planner project",
                     "CFBundleTypeRole": "Editor",
-                    "CFBundleTypeExtensions": ["spp.json"],
+                    "CFBundleTypeExtensions": ["spp"],
                 }
             ],
         },

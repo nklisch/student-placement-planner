@@ -64,7 +64,7 @@ STEP_HELP = (
     "Enter or calculate each student's drive to each location.",
     "Review, export, or print the latest placements.",
 )
-PROJECT_FILE_SUFFIX = ".spp.json"
+PROJECT_FILE_SUFFIX = ".spp"
 
 _PRESETS = (
     ("Fair commute (recommended)", FAIR_COMMUTE_OBJECTIVES),

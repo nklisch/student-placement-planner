@@ -48,7 +48,7 @@ Name: "{group}\Student Placement Planner"; Filename: "{app}\Student Placement Pl
 Name: "{autodesktop}\Student Placement Planner"; Filename: "{app}\Student Placement Planner.exe"; Tasks: desktopicon
 
 [Registry]
-Root: HKCU; Subkey: "Software\Classes\.spp.json"; ValueType: string; ValueName: ""; ValueData: "StudentPlacementPlanner.Project"; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\.spp"; ValueType: string; ValueName: ""; ValueData: "StudentPlacementPlanner.Project"; Flags: uninsdeletevalue
 Root: HKCU; Subkey: "Software\Classes\StudentPlacementPlanner.Project"; ValueType: string; ValueName: ""; ValueData: "Student Placement Planner project"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\StudentPlacementPlanner.Project\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\Student Placement Planner.exe,0"
 Root: HKCU; Subkey: "Software\Classes\StudentPlacementPlanner.Project\shell\open\command"; ValueType: string; ValueName: ""; ValueData: "\"{app}\Student Placement Planner.exe\" \"%1\""
