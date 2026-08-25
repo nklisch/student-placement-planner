@@ -52,23 +52,27 @@ jobs:
 
       - name: Prepare signing certificate
         shell: pwsh
+        timeout-minutes: 2
         run: |
           $password = $env:WINDOWS_CERTIFICATE_PASSWORD
           if ($env:WINDOWS_CERTIFICATE_BASE64) {
             [IO.File]::WriteAllBytes("signing.pfx", [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
             "SIGNING_KIND=trusted" | Out-File -FilePath $env:GITHUB_ENV -Append
           } else {
+            # New-SelfSignedCertificate can block indefinitely on hosted runners
+            # while initializing the Windows key store. OpenSSL produces the
+            # same disposable preview certificate without touching that store.
             $password = [Guid]::NewGuid().ToString("N")
-            $secure = ConvertTo-SecureString $password -AsPlainText -Force
-            $certificate = New-SelfSignedCertificate `
-              -Type CodeSigningCert `
-              -Subject "CN=Student Placement Planner Preview" `
-              -CertStoreLocation Cert:\CurrentUser\My `
-              -NotAfter (Get-Date).AddYears(2)
-            Export-PfxCertificate -Cert $certificate -FilePath signing.pfx -Password $secure | Out-Null
-            Export-Certificate -Cert $certificate -FilePath signing.cer | Out-Null
-            Import-Certificate -FilePath signing.cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
-            Import-Certificate -FilePath signing.cer -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
+            & openssl req -x509 -newkey rsa:3072 -sha256 -nodes `
+              -keyout signing.key -out signing.pem -days 730 `
+              -subj "/CN=Student Placement Planner Preview" `
+              -addext "extendedKeyUsage=codeSigning"
+            if ($LASTEXITCODE -ne 0) { throw "OpenSSL could not create the preview certificate" }
+            & openssl pkcs12 -export -out signing.pfx -inkey signing.key `
+              -in signing.pem -passout "pass:$password"
+            if ($LASTEXITCODE -ne 0) { throw "OpenSSL could not create the signing bundle" }
+            certutil -user -f -addstore Root signing.pem | Out-Null
+            certutil -user -f -addstore TrustedPublisher signing.pem | Out-Null
             "WINDOWS_CERTIFICATE_PASSWORD=$password" | Out-File -FilePath $env:GITHUB_ENV -Append
             "SIGNING_KIND=self-signed-preview" | Out-File -FilePath $env:GITHUB_ENV -Append
           }
@@ -216,7 +220,10 @@ jobs:
       - name: Verify and checksum disk image
         run: |
           DMG=$(find release -name '*.dmg' -print -quit)
-          codesign --verify --verbose=2 "$DMG"
+          hdiutil verify "$DMG"
+          if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
+            codesign --verify --verbose=2 "$DMG"
+          fi
           shasum -a 256 "$DMG" | sed 's#release/##' > release/SHA256SUMS-macOS.txt
           printf 'Signing: %s\n' "$SIGNING_KIND" > release/SIGNING-macOS.txt
 
