@@ -61,6 +61,9 @@ jobs:
               throw "Bundled native runtime is missing: $runtime"
             }
           }
+          if (-not (Test-Path "$appDir\_internal\ortools\.libs\ortools.dll")) {
+            throw "Bundled OR-Tools native library is missing"
+          }
           $env:SPP_SELF_TEST_REPORT = "$env:RUNNER_TEMP\optimizer-self-test.txt"
           & "$appDir\Student Placement Planner.exe" --self-test-optimization
           if ($LASTEXITCODE -ne 0) {

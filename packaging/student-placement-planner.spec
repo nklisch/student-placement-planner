@@ -37,6 +37,17 @@ if importlib.util.find_spec("osmium") is not None:
     offline_hidden.extend(package_hidden)
 
 if sys.platform == "win32":
+    # The Windows wheel loads its shared native libraries from ortools/.libs.
+    # PyInstaller does not currently discover that private directory by itself.
+    ortools_spec = importlib.util.find_spec("ortools")
+    if ortools_spec is None or ortools_spec.origin is None:
+        raise RuntimeError("The OR-Tools package was not found")
+    ortools_lib_dir = Path(ortools_spec.origin).parent / ".libs"
+    ortools_libraries = sorted(ortools_lib_dir.glob("*.dll"))
+    if not ortools_libraries:
+        raise RuntimeError("The OR-Tools native libraries were not found")
+    platform_binaries.extend((str(library), "ortools/.libs") for library in ortools_libraries)
+
     # OR-Tools' native CP-SAT module links against the VC143 C++ runtime. PyInstaller
     # intentionally treats that runtime as a system library, but clean Windows PCs do
     # not necessarily have it. Use Microsoft's supported app-local deployment files.
