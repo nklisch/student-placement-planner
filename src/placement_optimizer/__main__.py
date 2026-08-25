@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+import traceback
+from contextlib import suppress
 from importlib.resources import as_file, files
 from pathlib import Path
 
@@ -27,6 +30,14 @@ def _offline_builder_self_test() -> int:
     return 0 if result.returncode == 0 else 1
 
 
+def _write_self_test_report(message: str) -> None:
+    report_path = os.environ.get("SPP_SELF_TEST_REPORT")
+    if not report_path:
+        return
+    with suppress(OSError):
+        Path(report_path).write_text(message, encoding="utf-8")
+
+
 def _optimization_self_test() -> int:
     try:
         from ortools.sat.python import cp_model
@@ -35,9 +46,13 @@ def _optimization_self_test() -> int:
         value = model.new_bool_var("runtime_check")
         model.add(value == 1)
         result = cp_model.CpSolver().solve(model)
-    except (ImportError, OSError, RuntimeError):
+    except Exception:
+        _write_self_test_report(traceback.format_exc())
         return 1
-    return 0 if result in (cp_model.OPTIMAL, cp_model.FEASIBLE) else 1
+    if result not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        _write_self_test_report(f"Unexpected OR-Tools solve status: {result!r}\n")
+        return 1
+    return 0
 
 
 def main() -> int:

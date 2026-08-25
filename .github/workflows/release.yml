@@ -59,8 +59,12 @@ jobs:
               throw "Bundled native runtime is missing: $runtime"
             }
           }
+          $env:SPP_SELF_TEST_REPORT = "$env:RUNNER_TEMP\optimizer-self-test.txt"
           & "$appDir\Student Placement Planner.exe" --self-test-optimization
-          if ($LASTEXITCODE -ne 0) { throw "Bundled OR-Tools runtime check failed" }
+          if ($LASTEXITCODE -ne 0) {
+            if (Test-Path $env:SPP_SELF_TEST_REPORT) { Get-Content $env:SPP_SELF_TEST_REPORT }
+            throw "Bundled OR-Tools runtime check failed"
+          }
           & "$appDir\Student Placement Planner.exe" --self-test-offline-builder
           if ($LASTEXITCODE -ne 0) { throw "Bundled offline-region builder check failed" }
 
@@ -153,8 +157,12 @@ jobs:
           $arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=`"$installDir`""
           $install = Start-Process $installer -ArgumentList $arguments -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
+          $env:SPP_SELF_TEST_REPORT = "$env:RUNNER_TEMP\installed-optimizer-self-test.txt"
           & "$installDir\Student Placement Planner.exe" --self-test-optimization
-          if ($LASTEXITCODE -ne 0) { throw "Installed OR-Tools runtime check failed" }
+          if ($LASTEXITCODE -ne 0) {
+            if (Test-Path $env:SPP_SELF_TEST_REPORT) { Get-Content $env:SPP_SELF_TEST_REPORT }
+            throw "Installed OR-Tools runtime check failed"
+          }
           $env:QT_QPA_PLATFORM = "offscreen"
           $app = Start-Process "$installDir\Student Placement Planner.exe" -PassThru
           Start-Sleep -Seconds 4
