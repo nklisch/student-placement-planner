@@ -99,8 +99,13 @@ jobs:
           if (-not (Test-Path $iscc)) {
             choco install innosetup --yes --no-progress
           }
+          $versionMatch = [regex]::Match($env:RELEASE_VERSION, '^(\d+)\.(\d+)\.(\d+)(?:b(\d+))?')
+          if (-not $versionMatch.Success) { throw "Release version is not valid" }
+          $buildNumber = if ($versionMatch.Groups[4].Success) { $versionMatch.Groups[4].Value } else { "0" }
+          $numericVersion = "$($versionMatch.Groups[1].Value).$($versionMatch.Groups[2].Value).$($versionMatch.Groups[3].Value).$buildNumber"
           & $iscc `
             "/DAppVersion=$env:RELEASE_VERSION" `
+            "/DAppNumericVersion=$numericVersion" `
             "/DSourceDir=$env:GITHUB_WORKSPACE\dist\Student Placement Planner" `
             packaging\windows\installer.iss
 

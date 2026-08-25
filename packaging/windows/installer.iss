@@ -2,6 +2,9 @@
 #ifndef AppVersion
   #define AppVersion "0.1.0"
 #endif
+#ifndef AppNumericVersion
+  #define AppNumericVersion "0.1.0.0"
+#endif
 #ifndef SourceDir
   #define SourceDir "..\..\dist\Student Placement Planner"
 #endif
@@ -32,7 +35,8 @@ LicenseFile=..\..\LICENSE
 VersionInfoCompany=Nathan Klisch
 VersionInfoDescription=Student Placement Planner installer
 VersionInfoProductName={#AppName}
-VersionInfoProductVersion={#AppVersion}
+VersionInfoVersion={#AppNumericVersion}
+VersionInfoProductVersion={#AppNumericVersion}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
