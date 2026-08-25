@@ -48,8 +48,6 @@ jobs:
         run: python -m pytest -q
 
       - name: Build self-contained application
-        env:
-          SPP_BUILD_CONSOLE: ${{ github.ref_type == 'branch' && '1' || '0' }}
         run: pyinstaller --clean --noconfirm packaging/student-placement-planner.spec
 
       - name: Check bundled native dependencies
@@ -65,14 +63,18 @@ jobs:
             throw "Bundled OR-Tools native library is missing"
           }
           $env:SPP_SELF_TEST_REPORT = "$env:RUNNER_TEMP\optimizer-self-test.txt"
-          & "$appDir\Student Placement Planner.exe" --self-test-optimization
-          if ($LASTEXITCODE -ne 0) {
+          $optimizationTest = Start-Process `
+            -FilePath "$appDir\Student Placement Planner.exe" `
+            -ArgumentList "--self-test-optimization" -Wait -PassThru
+          if ($optimizationTest.ExitCode -ne 0) {
             if (Test-Path $env:SPP_SELF_TEST_REPORT) { Get-Content $env:SPP_SELF_TEST_REPORT }
             throw "Bundled OR-Tools runtime check failed"
           }
           $env:SPP_SELF_TEST_REPORT = "$env:RUNNER_TEMP\offline-builder-self-test.txt"
-          & "$appDir\Student Placement Planner.exe" --self-test-offline-builder
-          if ($LASTEXITCODE -ne 0) {
+          $offlineTest = Start-Process `
+            -FilePath "$appDir\Student Placement Planner.exe" `
+            -ArgumentList "--self-test-offline-builder" -Wait -PassThru
+          if ($offlineTest.ExitCode -ne 0) {
             if (Test-Path $env:SPP_SELF_TEST_REPORT) { Get-Content $env:SPP_SELF_TEST_REPORT }
             throw "Bundled offline-region builder check failed"
           }
@@ -167,8 +169,10 @@ jobs:
           $install = Start-Process $installer -ArgumentList $arguments -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
           $env:SPP_SELF_TEST_REPORT = "$env:RUNNER_TEMP\installed-optimizer-self-test.txt"
-          & "$installDir\Student Placement Planner.exe" --self-test-optimization
-          if ($LASTEXITCODE -ne 0) {
+          $optimizationTest = Start-Process `
+            -FilePath "$installDir\Student Placement Planner.exe" `
+            -ArgumentList "--self-test-optimization" -Wait -PassThru
+          if ($optimizationTest.ExitCode -ne 0) {
             if (Test-Path $env:SPP_SELF_TEST_REPORT) { Get-Content $env:SPP_SELF_TEST_REPORT }
             throw "Installed OR-Tools runtime check failed"
           }
