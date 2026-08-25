@@ -55,7 +55,7 @@ Name: "{autodesktop}\Student Placement Planner"; Filename: "{app}\Student Placem
 Root: HKCU; Subkey: "Software\Classes\.spp"; ValueType: string; ValueName: ""; ValueData: "StudentPlacementPlanner.Project"; Flags: uninsdeletevalue
 Root: HKCU; Subkey: "Software\Classes\StudentPlacementPlanner.Project"; ValueType: string; ValueName: ""; ValueData: "Student Placement Planner project"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\StudentPlacementPlanner.Project\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\Student Placement Planner.exe,0"
-Root: HKCU; Subkey: "Software\Classes\StudentPlacementPlanner.Project\shell\open\command"; ValueType: string; ValueName: ""; ValueData: "\"{app}\Student Placement Planner.exe\" \"%1\""
+Root: HKCU; Subkey: "Software\Classes\StudentPlacementPlanner.Project\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Student Placement Planner.exe"" ""%1"""
 
 [Run]
 Filename: "{app}\Student Placement Planner.exe"; Description: "Launch Student Placement Planner"; Flags: nowait postinstall skipifsilent
