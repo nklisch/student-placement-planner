@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Student Placement Planner</title>
+  <desc id="desc">A white location marker with a check mark on a green background.</desc>
+  <rect x="40" y="40" width="944" height="944" rx="210" fill="#2F6F5E"/>
+  <path fill="#fff" d="M512 122c-183 0-332 149-332 332 0 246 332 484 332 484s332-238 332-484c0-183-149-332-332-332Z"/>
+  <circle cx="512" cy="454" r="190" fill="#2F6F5E"/>
+  <path d="m406 452 72 72 148-160" fill="none" stroke="#fff" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Student Placement Planner — fair student placements in minutes</title>
+  <meta name="description" content="A free, local-first desktop app for school staff. Paste students and locations from a spreadsheet, add rules, and find fair placements with road driving times.">
+  <meta name="color-scheme" content="light dark">
+  <meta property="og:title" content="Student Placement Planner">
+  <meta property="og:description" content="Fair student placements, worked out in minutes.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://nklisch.github.io/student-placement-planner/">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="canonical" href="https://nklisch.github.io/student-placement-planner/">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header" id="top">
+    <div class="header-inner">
+      <a class="wordmark" href="#top">Student Placement Planner</a>
+      <nav aria-label="Main navigation">
+        <a href="#how-it-works">How it works</a>
+        <a href="#status">What's ready</a>
+        <a href="#download">Download</a>
+        <a href="#faq">Questions</a>
+        <a class="button button-outline button-small" href="https://github.com/nklisch/student-placement-planner">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero section" aria-labelledby="hero-title">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">A local-first desktop app for school staff</p>
+          <h1 id="hero-title">Fair student placements, worked out in minutes.</h1>
+          <p class="hero-lead">Paste students and placement sites straight from a spreadsheet, add the rules that matter, and get a complete placement list based on real road driving times.</p>
+          <div class="button-row">
+            <a class="button button-primary" href="#download">Get the app</a>
+            <a class="button button-outline" href="https://github.com/nklisch/student-placement-planner">View on GitHub</a>
+          </div>
+          <p class="quiet-line">Free and open source · No accounts or tracking</p>
+        </div>
+
+        <div class="demo-card" aria-hidden="true">
+          <div class="demo-heading">
+            <strong>Results</strong>
+            <span class="demo-success">✓ Placements found — every rule is satisfied.</span>
+          </div>
+          <div class="demo-table">
+            <div class="demo-row demo-labels"><span>Student</span><span>Placement</span><span>Drive</span><span>Choice</span></div>
+            <div class="demo-row"><span>Aisha</span><span>North Clinic</span><span>12 min</span><span>1st</span></div>
+            <div class="demo-row"><span>Mateo</span><span>Riverside School</span><span>9 min</span><span>2nd</span></div>
+            <div class="demo-row"><span>Ana</span><span>Riverside School</span><span>14 min</span><span>1st</span></div>
+            <div class="demo-row"><span>Jonah</span><span>North Clinic</span><span>7 min</span><span>—</span></div>
+          </div>
+          <p class="demo-summary">Longest drive <strong>14 min</strong> · Average <strong>11 min</strong> · Got a choice <strong>3 of 4</strong></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="features" aria-labelledby="features-title">
+      <div class="container">
+        <h2 id="features-title">Built for school staff</h2>
+        <div class="card-grid">
+          <article class="feature-card">
+            <h3>Works like a spreadsheet</h3>
+            <p>Type into tables, paste from Excel or Google Sheets, or import a CSV file. If you can use a spreadsheet, you can use this.</p>
+          </article>
+          <article class="feature-card">
+            <h3>Fairness you choose</h3>
+            <p>Spread drive times fairly, keep total driving low, or honor student choices first. Every rule you set is respected.</p>
+          </article>
+          <article class="feature-card">
+            <h3>Private by default</h3>
+            <p>No accounts, cloud storage, or tracking. Offline maps stay on your computer. If you choose Google Maps, only addresses or coordinates are sent — never names, choices, or rules.</p>
+          </article>
+          <article class="feature-card">
+            <h3>Results you can share</h3>
+            <p>A clear placement list with drive times, road distances, capacity counts, and choices — ready to export or print.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-tinted" id="how-it-works" aria-labelledby="how-title">
+      <div class="container">
+        <h2 id="how-title">How it works</h2>
+        <ol class="steps">
+          <li><span class="step-number">1</span><h3>Add your students</h3><p>Type, paste, or import a list. Names are enough for manual driving times; maps use addresses or coordinates.</p></li>
+          <li><span class="step-number">2</span><h3>Add your locations</h3><p>Enter each placement site and how many students it can take.</p></li>
+          <li><span class="step-number">3</span><h3>Add rules if needed</h3><p>Keep students together or apart, pin a placement, or set a maximum drive. Most projects need few rules.</p></li>
+          <li><span class="step-number">4</span><h3>Provide driving times</h3><p>Paste minutes, use Google Maps, or download a region once for fully offline address and road searches.</p></li>
+          <li><span class="step-number">5</span><h3>Find placements</h3><p>Review the complete list, drive times, road distances, and capacity use. Then export or print it.</p></li>
+        </ol>
+        <div class="explanation">
+          <h3>What's happening behind the scenes</h3>
+          <p>The app compares the possible ways of matching students to locations. It sets aside any arrangement that breaks a capacity or rule, then chooses the one that best matches the goal you selected. For school-sized groups this normally takes seconds, and a rule is never quietly bent to make the result look better.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="status" aria-labelledby="status-title">
+      <div class="container narrow-intro">
+        <h2 id="status-title">What's ready — and what's next</h2>
+        <p>The complete workflow is built and tested. Native installers are the last step before the public beta.</p>
+        <div class="status-grid">
+          <article class="status-card">
+            <span class="badge badge-ready">Ready today</span>
+            <ul>
+              <li>Spreadsheet entry, paste, and CSV import</li>
+              <li>Choices, pins, groups, eligibility, and driving limits</li>
+              <li>Manual, Google Maps, and downloadable offline-region travel times</li>
+              <li>Address review, safe cancellation, save/open, export, and print</li>
+            </ul>
+          </article>
+          <article class="status-card status-next">
+            <span class="badge badge-next">In final testing</span>
+            <ul>
+              <li>Normal Windows installer</li>
+              <li>Apple-Silicon macOS disk image</li>
+              <li>Operating-system signing and clean-machine checks</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-download" id="download" aria-labelledby="download-title">
+      <div class="container download-card">
+        <span class="badge badge-next">In preparation</span>
+        <h2 id="download-title">Download</h2>
+        <h3>Not released yet — but not far off.</h3>
+        <p>The app and all three travel options are built and tested. Windows and macOS packages are now going through native build and installation checks so the public beta does not require Python, a terminal, or technical setup.</p>
+        <div class="button-row button-row-center">
+          <a class="button button-primary" href="https://github.com/nklisch/student-placement-planner/releases">Watch the releases page</a>
+          <a class="button button-outline" href="https://github.com/nklisch/student-placement-planner#readme">Read the README</a>
+        </div>
+        <p class="quiet-line">On GitHub, choose Watch → Custom → Releases to receive an email when it ships.</p>
+      </div>
+    </section>
+
+    <section class="section" id="faq" aria-labelledby="faq-title">
+      <div class="container faq-container">
+        <h2 id="faq-title">Questions</h2>
+        <details><summary>Is it really free?</summary><p>Yes. Student Placement Planner is open source under the MIT license — free to use, share, and modify.</p></details>
+        <details><summary>Where does student data go?</summary><p>The app has no accounts, cloud database, or telemetry. Project files stay on your computer. If you choose Google Maps, only street addresses or coordinates are sent — never names, IDs, choices, capacities, or rules.</p></details>
+        <details><summary>Can it work without internet?</summary><p>Yes. Enter driving times yourself, or download an offline region once. Address matching and road searches then run entirely on your computer.</p></details>
+        <details><summary>Do I need to be good with computers?</summary><p>No. The public beta will install like a normal program. Until then, running it requires developer tools; the README explains those early setup steps.</p></details>
+        <details><summary>Does it work on Windows or Mac?</summary><p>Both are being packaged now. The first macOS beta targets Apple Silicon, and downloads will appear on the releases page.</p></details>
+        <details><summary>How many students can it handle?</summary><p>It is designed for up to about 100 students, which covers a typical school placement run.</p></details>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-grid">
+      <div>
+        <strong>Student Placement Planner</strong>
+        <p>A free, local-first desktop tool for school placement season.</p>
+      </div>
+      <div>
+        <strong>Learn more</strong>
+        <a href="https://github.com/nklisch/student-placement-planner#readme">README</a>
+        <a href="https://github.com/nklisch/student-placement-planner/blob/main/docs/GOOGLE_MAPS_SETUP.md">Google Maps setup</a>
+        <a href="https://github.com/nklisch/student-placement-planner/blob/main/docs/MAP_PACKS.md">Offline map packs</a>
+        <a href="https://github.com/nklisch/student-placement-planner/blob/main/docs/UI_SPECIFICATION.md">Interface guide</a>
+      </div>
+      <div>
+        <strong>Project</strong>
+        <a href="https://github.com/nklisch/student-placement-planner/releases">Releases</a>
+        <a href="https://github.com/nklisch/student-placement-planner/issues">Report a problem</a>
+        <a href="https://github.com/nklisch/student-placement-planner/blob/main/LICENSE">MIT license</a>
+      </div>
+    </div>
+    <p class="legal">MIT licensed · No cookies · No tracking · Built as one small static page</p>
+  </footer>
+</body>
+</html>

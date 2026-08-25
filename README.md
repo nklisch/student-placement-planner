@@ -1,6 +1,8 @@
 # Student Placement Planner
 
-Student Placement Planner is a local-first desktop utility for assigning students to placement locations while respecting capacity, choices, eligibility, group rules, and driving-time limits.
+Student Placement Planner is a friendly, local-first desktop app that helps school staff match students to placement locations while respecting capacity, choices, group needs, and driving-time limits.
+
+[Visit the project website](https://nklisch.github.io/student-placement-planner/) · [View releases](https://github.com/nklisch/student-placement-planner/releases)
 
 It is designed as a calm, spreadsheet-friendly tool for school staff:
 
@@ -40,6 +42,7 @@ Useful project pages:
 - [Offline map packs](docs/MAP_PACKS.md)
 - [Product and build requirements](docs/BUILD_INSTRUCTIONS.md)
 - [Desktop interface specification](docs/UI_SPECIFICATION.md)
+- [Building and publishing releases](docs/RELEASING.md)
 
 ## License
 
