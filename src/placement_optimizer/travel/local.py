@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from collections.abc import Sequence
 from itertools import islice
 from urllib.parse import quote
@@ -19,12 +21,24 @@ class NominatimGeocoder:
         client: httpx.AsyncClient,
         *,
         country_codes: str | None = None,
+        minimum_interval_seconds: float = 0,
     ) -> None:
+        if minimum_interval_seconds < 0:
+            raise ValueError("minimum request interval cannot be negative")
         self._base_url = base_url.rstrip("/")
         self._client = client
         self._country_codes = country_codes
+        self._minimum_interval_seconds = minimum_interval_seconds
+        self._last_request_started: float | None = None
 
     async def geocode(self, address: str) -> GeocodingResult:
+        if self._last_request_started is not None:
+            remaining = self._minimum_interval_seconds - (
+                time.monotonic() - self._last_request_started
+            )
+            if remaining > 0:
+                await asyncio.sleep(remaining)
+        self._last_request_started = time.monotonic()
         params: dict[str, str | int] = {
             "q": address,
             "format": "jsonv2",
@@ -102,7 +116,7 @@ class OsrmRouteMatrix:
         return TravelMatrix(
             distances_meters=tuple(tuple(row) for row in distances),
             durations_seconds=tuple(tuple(row) for row in durations),
-            source="local_osrm",
+            source="community_osrm",
         )
 
     async def _route_block(

@@ -183,11 +183,13 @@ class GoogleRoutesMatrix:
                     )
                 if element.get("condition") != "ROUTE_EXISTS":
                     continue
+                # Protobuf JSON omits fields holding their zero default, which
+                # is normal when testing a route from a point to itself.
                 distances[origin_index][destination_index] = _nonnegative_finite_int(
-                    element["distanceMeters"], "distance"
+                    element.get("distanceMeters", 0), "distance"
                 )
                 durations[origin_index][destination_index] = _parse_duration(
-                    element.get("duration")
+                    element.get("duration", "0s")
                 )
             except TravelDataError:
                 raise

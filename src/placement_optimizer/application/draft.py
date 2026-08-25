@@ -28,6 +28,8 @@ class DraftArea(StrEnum):
 class TravelMode(StrEnum):
     MANUAL = "manual"
     OFFLINE = "offline"
+    COMMUNITY = "community"
+    OPENROUTESERVICE = "openrouteservice"
     GOOGLE = "google"
 
 
@@ -199,10 +201,13 @@ class DraftSession:
             return False
         version_changed = self._calculated_travel_version != self.travel_input_version
         source = self.calculated_matrix.source
-        mode_changed = (self.travel_mode is TravelMode.GOOGLE and source != "google_routes") or (
-            self.travel_mode is TravelMode.OFFLINE
-            and not source.startswith(("valhalla:", "local_osrm"))
-        )
+        expected_source = {
+            TravelMode.OFFLINE: lambda value: value.startswith("valhalla:"),
+            TravelMode.COMMUNITY: lambda value: value == "community_osrm",
+            TravelMode.OPENROUTESERVICE: lambda value: value == "openrouteservice",
+            TravelMode.GOOGLE: lambda value: value == "google_routes",
+        }.get(self.travel_mode)
+        mode_changed = expected_source is not None and not expected_source(source)
         return version_changed or mode_changed
 
     def set_name(self, name: str) -> None:

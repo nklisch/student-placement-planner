@@ -239,6 +239,30 @@ async def test_google_routes_rejects_missing_or_duplicate_elements(elements, mes
             )
 
 
+async def test_google_routes_accepts_omitted_zero_fields() -> None:
+    def handle(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "originIndex": 0,
+                    "destinationIndex": 0,
+                    "status": {},
+                    "condition": "ROUTE_EXISTS",
+                }
+            ],
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        matrix = await GoogleRoutesMatrix("secret", client).route_matrix(
+            (Coordinate(51, -1),),
+            (Coordinate(51, -1),),
+        )
+
+    assert matrix.distances_meters == ((0,),)
+    assert matrix.durations_seconds == ((0,),)
+
+
 async def test_google_routes_rejects_non_finite_distance() -> None:
     def handle(request: httpx.Request) -> httpx.Response:
         return httpx.Response(

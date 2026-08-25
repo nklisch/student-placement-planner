@@ -17,6 +17,10 @@ from placement_optimizer.travel.geocoding import (
 )
 from placement_optimizer.travel.google import GoogleGeocoder, GoogleRoutesMatrix
 from placement_optimizer.travel.local import NominatimGeocoder, OsrmRouteMatrix
+from placement_optimizer.travel.openrouteservice import (
+    OpenRouteServiceGeocoder,
+    OpenRouteServiceMatrix,
+)
 from placement_optimizer.travel.pack_builder import build_map_pack
 from placement_optimizer.travel.packs import (
     DEFAULT_PACK_CATALOG_URL,
@@ -57,6 +61,8 @@ __all__ = [
     "MatrixEntry",
     "NominatimGeocoder",
     "OfflineAddressIndex",
+    "OpenRouteServiceGeocoder",
+    "OpenRouteServiceMatrix",
     "OsrmRouteMatrix",
     "ResolvedPlace",
     "RouteMatrixProvider",

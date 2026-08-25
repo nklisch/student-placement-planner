@@ -37,6 +37,28 @@ class _Workflow:
     def __init__(self) -> None:
         self.calls: list[str] = []
 
+    async def test_community(self) -> None:
+        self.calls.append("test-community")
+
+    async def review_community(self, travel_input):
+        self.calls.append("review-community")
+        return _review(travel_input)
+
+    async def calculate_community(self, review):
+        self.calls.append("calculate-community")
+        return _matrix(review, "community_osrm")
+
+    async def test_openrouteservice(self, _key: str) -> None:
+        self.calls.append("test-openrouteservice")
+
+    async def review_openrouteservice(self, travel_input, _key: str):
+        self.calls.append("review-openrouteservice")
+        return _review(travel_input)
+
+    async def calculate_openrouteservice(self, review, _key: str):
+        self.calls.append("calculate-openrouteservice")
+        return _matrix(review, "openrouteservice")
+
     async def test_google(self, _key: str) -> None:
         self.calls.append("test-google")
 
@@ -117,18 +139,51 @@ def test_offline_mode_explains_that_a_region_is_needed(window, fill_small) -> No
     assert not page.offline_calculate_button.isEnabled()
 
 
-def test_online_mode_discloses_data_and_requires_key(window, fill_small) -> None:
+def test_online_mode_offers_no_key_service_and_protects_roster_data(window, fill_small) -> None:
     fill_small(window.controller)
     page = window.pages[3]
     page.online_card.select()
 
     panel = page.panels.currentWidget()
     texts = [label.text() for label in panel.findChildren(QLabel)]
-    assert any("never leave this computer" in text for text in texts)
+    assert any("never sent" in text for text in texts)
+    assert window.controller.session.travel_mode is TravelMode.COMMUNITY
+    assert page.community_calculate_button.isEnabled()
     page.google_key.clear()
     page._review_addresses(TravelMode.GOOGLE)
     assert "Paste a Google Maps API key" in page.google_message.text()
     assert not window.controller.session.readiness().travel_ready
+
+
+def test_community_mode_reviews_then_calculates(window, qtbot, fill_small, monkeypatch) -> None:
+    fill_small(window.controller)
+    page = window.pages[3]
+    workflow = _Workflow()
+    page._workflow = workflow
+    monkeypatch.setattr(travel_module, "AddressReviewDialog", _AcceptedReviewDialog)
+    page.online_card.select()
+
+    page._review_addresses(TravelMode.COMMUNITY)
+
+    qtbot.waitUntil(
+        lambda: window.controller.session.calculated_matrix is not None,
+        timeout=5000,
+    )
+    qtbot.waitUntil(lambda: page._provider_worker is None, timeout=5000)
+    assert workflow.calls == ["review-community", "calculate-community"]
+    assert window.controller.session.calculated_matrix.source == "community_osrm"
+    assert window.controller.session.readiness().travel_ready
+
+
+def test_openrouteservice_requires_key(window, fill_small) -> None:
+    fill_small(window.controller)
+    page = window.pages[3]
+    page.ors_key.clear()
+
+    page._review_addresses(TravelMode.OPENROUTESERVICE)
+
+    assert "Paste an openrouteservice API key" in page.ors_message.text()
+    assert window.controller.session.travel_mode is TravelMode.OPENROUTESERVICE
 
 
 def test_google_mode_reviews_then_calculates(window, qtbot, fill_small, monkeypatch) -> None:

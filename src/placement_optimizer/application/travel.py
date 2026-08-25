@@ -12,7 +12,11 @@ from placement_optimizer.travel import (
     GoogleGeocoder,
     GoogleRoutesMatrix,
     InstalledMapPack,
+    NominatimGeocoder,
     OfflineAddressIndex,
+    OpenRouteServiceGeocoder,
+    OpenRouteServiceMatrix,
+    OsrmRouteMatrix,
     TravelCoordinateReview,
     TravelMatrix,
     ValhallaRouteMatrix,
@@ -31,6 +35,12 @@ class TravelWorkflow:
             lambda: httpx.AsyncClient(
                 timeout=httpx.Timeout(45.0, connect=15.0),
                 follow_redirects=True,
+                headers={
+                    "User-Agent": (
+                        "StudentPlacementPlanner/0.1 "
+                        "(+https://github.com/nklisch/student-placement-planner)"
+                    )
+                },
             )
         )
 
@@ -62,6 +72,68 @@ class TravelWorkflow:
     ) -> TravelMatrix:
         async with self._client_factory() as client:
             return await route_reviewed_matrix(review, GoogleRoutesMatrix(api_key, client))
+
+    async def test_community(self) -> None:
+        """Check the shared no-key geocoder and road router."""
+
+        async with self._client_factory() as client:
+            geocoder = NominatimGeocoder(
+                "https://nominatim.openstreetmap.org",
+                client,
+                minimum_interval_seconds=1.05,
+            )
+            router = OsrmRouteMatrix("https://router.project-osrm.org", client)
+            match = await geocoder.geocode("Andorra la Vella")
+            await router.route_matrix((match.coordinate,), (match.coordinate,))
+
+    async def review_community(self, travel_input: TravelInput) -> TravelCoordinateReview:
+        async with self._client_factory() as client:
+            return await resolve_travel_coordinates(
+                travel_input.students,
+                travel_input.locations,
+                NominatimGeocoder(
+                    "https://nominatim.openstreetmap.org",
+                    client,
+                    minimum_interval_seconds=1.05,
+                ),
+            )
+
+    async def calculate_community(self, review: TravelCoordinateReview) -> TravelMatrix:
+        async with self._client_factory() as client:
+            return await route_reviewed_matrix(
+                review,
+                OsrmRouteMatrix("https://router.project-osrm.org", client),
+            )
+
+    async def test_openrouteservice(self, api_key: str) -> None:
+        async with self._client_factory() as client:
+            geocoder = OpenRouteServiceGeocoder(api_key, client)
+            router = OpenRouteServiceMatrix(api_key, client)
+            match = await geocoder.geocode("Heidelberg, Germany")
+            await router.route_matrix((match.coordinate,), (match.coordinate,))
+
+    async def review_openrouteservice(
+        self,
+        travel_input: TravelInput,
+        api_key: str,
+    ) -> TravelCoordinateReview:
+        async with self._client_factory() as client:
+            return await resolve_travel_coordinates(
+                travel_input.students,
+                travel_input.locations,
+                OpenRouteServiceGeocoder(api_key, client),
+            )
+
+    async def calculate_openrouteservice(
+        self,
+        review: TravelCoordinateReview,
+        api_key: str,
+    ) -> TravelMatrix:
+        async with self._client_factory() as client:
+            return await route_reviewed_matrix(
+                review,
+                OpenRouteServiceMatrix(api_key, client),
+            )
 
     async def review_offline(
         self,

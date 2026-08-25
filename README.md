@@ -14,7 +14,7 @@ It is designed as a calm, spreadsheet-friendly tool for school staff:
 
 ## Project status
 
-The manual, Google Maps, and downloadable offline-map workflows are implemented and tested. Native Windows and macOS packaging is now the remaining release phase.
+Manual entry, no-key community routing, openrouteservice, Google Maps, and downloadable offline-map workflows are implemented and tested. Native Windows and macOS packaging is the remaining release phase.
 
 There is no public installer yet. The first beta will be distributed through [GitHub Releases](https://github.com/nklisch/student-placement-planner/releases) as a normal Windows installer and macOS disk image. End users will not need Python or a terminal.
 

@@ -1,4 +1,4 @@
-"""Travel-time entry and provider workflows for manual, offline, and Google modes."""
+"""Travel-time entry and online/offline provider workflows."""
 
 from __future__ import annotations
 
@@ -54,10 +54,14 @@ INTRO = (
 OFFLINE_COPY = (
     "Download a map of your region once, then it works with no internet. Nothing is sent anywhere."
 )
-ONLINE_COPY = "Addresses are sent to Google to get driving times. Names and choices are never sent."
+ONLINE_COPY = "Use a no-key community service, a free openrouteservice account, or Google Maps."
 ONLINE_DISCLOSURE = (
-    "Only street addresses (or coordinates) are sent to Google. Student names, "
-    "IDs, choices, and rules never leave this computer."
+    "Online services receive only street addresses (or coordinates). Student names, "
+    "IDs, choices, capacities, and rules are never sent."
+)
+COMMUNITY_COPY = (
+    "No account or API key. Uses the shared OpenStreetMap Nominatim and OSRM services "
+    "at a respectful rate. Availability is not guaranteed."
 )
 
 
@@ -107,9 +111,9 @@ class TravelPage(QWidget):
             lambda: self._set_mode(TravelMode.OFFLINE),
         )
         self.online_card = ModeCard(
-            "Online maps (Google)",
+            "Online route services",
             ONLINE_COPY,
-            lambda: self._set_mode(TravelMode.GOOGLE),
+            self._select_online_card,
         )
         self.mode_group = QButtonGroup(self)
         self.mode_group.setExclusive(True)
@@ -253,6 +257,95 @@ class TravelPage(QWidget):
         disclosure_layout.addWidget(make_label(ONLINE_DISCLOSURE, wrap=True))
         layout.addWidget(disclosure)
 
+        community = QFrame()
+        community.setProperty("card", "true")
+        community_layout = QVBoxLayout(community)
+        community_layout.setContentsMargins(16, 14, 16, 14)
+        community_layout.setSpacing(8)
+        community_layout.addWidget(make_label("Community OpenStreetMap services", role="heading"))
+        community_layout.addWidget(make_label(COMMUNITY_COPY, role="secondary", wrap=True))
+        community_actions = QHBoxLayout()
+        community_policy = QPushButton("Service policy…")
+        community_policy.setProperty("kind", "quiet")
+        community_policy.clicked.connect(
+            lambda: QDesktopServices.openUrl(
+                QUrl("https://operations.osmfoundation.org/policies/nominatim/")
+            )
+        )
+        self.community_test_button = QPushButton("Check services")
+        self.community_test_button.clicked.connect(self._test_community)
+        self.community_view_button = QPushButton("View times…")
+        self.community_view_button.clicked.connect(self._view_times)
+        self.community_calculate_button = QPushButton("Review addresses and calculate")
+        self.community_calculate_button.setProperty("kind", "primary")
+        self.community_calculate_button.clicked.connect(
+            lambda: self._choose_online_and_review(TravelMode.COMMUNITY)
+        )
+        community_actions.addWidget(community_policy)
+        community_actions.addWidget(self.community_test_button)
+        community_actions.addWidget(self.community_view_button)
+        community_actions.addWidget(self.community_calculate_button)
+        community_actions.addStretch(1)
+        community_layout.addLayout(community_actions)
+        self.community_message = make_label(
+            "Recommended for occasional use.", role="secondary", wrap=True
+        )
+        community_layout.addWidget(self.community_message)
+        layout.addWidget(community)
+
+        ors = QFrame()
+        ors.setProperty("card", "true")
+        ors_layout = QVBoxLayout(ors)
+        ors_layout.setContentsMargins(16, 14, 16, 14)
+        ors_layout.setSpacing(8)
+        ors_layout.addWidget(make_label("openrouteservice API key", role="heading"))
+        ors_layout.addWidget(
+            make_label(
+                "A free account provides a personal allowance without Google Cloud billing. "
+                "The key stays in memory until the app closes.",
+                role="secondary",
+                wrap=True,
+            )
+        )
+        ors_key_row = QHBoxLayout()
+        self.ors_key = QLineEdit(os.environ.get("OPENROUTESERVICE_API_KEY", ""))
+        self.ors_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.ors_key.setPlaceholderText("Paste openrouteservice API key")
+        self.ors_key.setAccessibleName("openrouteservice API key")
+        show_ors_key = QCheckBox("Show key")
+        show_ors_key.toggled.connect(
+            lambda shown: self.ors_key.setEchoMode(
+                QLineEdit.EchoMode.Normal if shown else QLineEdit.EchoMode.Password
+            )
+        )
+        ors_key_row.addWidget(self.ors_key, stretch=1)
+        ors_key_row.addWidget(show_ors_key)
+        ors_layout.addLayout(ors_key_row)
+        ors_actions = QHBoxLayout()
+        ors_help = QPushButton("Get a free API key…")
+        ors_help.setProperty("kind", "quiet")
+        ors_help.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl("https://openrouteservice.org/dev/#/signup"))
+        )
+        self.ors_test_button = QPushButton("Test connection")
+        self.ors_test_button.clicked.connect(self._test_openrouteservice)
+        self.ors_view_button = QPushButton("View times…")
+        self.ors_view_button.clicked.connect(self._view_times)
+        self.ors_calculate_button = QPushButton("Review addresses and calculate")
+        self.ors_calculate_button.setProperty("kind", "primary")
+        self.ors_calculate_button.clicked.connect(
+            lambda: self._choose_online_and_review(TravelMode.OPENROUTESERVICE)
+        )
+        ors_actions.addWidget(ors_help)
+        ors_actions.addWidget(self.ors_test_button)
+        ors_actions.addWidget(self.ors_view_button)
+        ors_actions.addWidget(self.ors_calculate_button)
+        ors_actions.addStretch(1)
+        ors_layout.addLayout(ors_actions)
+        self.ors_message = make_label("", role="secondary", wrap=True)
+        ors_layout.addWidget(self.ors_message)
+        layout.addWidget(ors)
+
         setup = QFrame()
         setup.setProperty("card", "true")
         setup_layout = QVBoxLayout(setup)
@@ -295,7 +388,7 @@ class TravelPage(QWidget):
         self.google_calculate_button = QPushButton("Review addresses and calculate")
         self.google_calculate_button.setProperty("kind", "primary")
         self.google_calculate_button.clicked.connect(
-            lambda: self._review_addresses(TravelMode.GOOGLE)
+            lambda: self._choose_online_and_review(TravelMode.GOOGLE)
         )
         actions.addWidget(key_help_button)
         actions.addWidget(self.google_test_button)
@@ -341,6 +434,37 @@ class TravelPage(QWidget):
         layout.addWidget(buttons)
         dialog.exec()
 
+    def _test_community(self) -> None:
+        async def task(_worker):
+            await self._workflow.test_community()
+            return True
+
+        self._start_provider_operation(
+            "community-test",
+            TravelMode.COMMUNITY,
+            task,
+            "Checking the community services…",
+            needs_travel_input=False,
+        )
+
+    def _test_openrouteservice(self) -> None:
+        key = self.ors_key.text().strip()
+        if not key:
+            self.ors_message.setText("Paste an openrouteservice API key first.")
+            return
+
+        async def task(_worker):
+            await self._workflow.test_openrouteservice(key)
+            return True
+
+        self._start_provider_operation(
+            "ors-test",
+            TravelMode.OPENROUTESERVICE,
+            task,
+            "Testing the openrouteservice connection…",
+            needs_travel_input=False,
+        )
+
     def _test_google(self) -> None:
         key = self.google_key.text().strip()
         if not key:
@@ -360,11 +484,28 @@ class TravelPage(QWidget):
         )
 
     def _review_addresses(self, mode: TravelMode) -> None:
+        if self._controller.session.travel_mode is not mode:
+            self._controller.session.set_travel_mode(mode)
+            self._controller.notify()
         travel_input = self._controller.session.build_travel_input()
         if travel_input is None:
             self._host.show_toast("Fix the student and location details first.")
             return
-        if mode is TravelMode.GOOGLE:
+        if mode is TravelMode.COMMUNITY:
+
+            async def task(_worker):
+                return await self._workflow.review_community(travel_input)
+
+        elif mode is TravelMode.OPENROUTESERVICE:
+            key = self.ors_key.text().strip()
+            if not key:
+                self.ors_message.setText("Paste an openrouteservice API key first.")
+                return
+
+            async def task(_worker):
+                return await self._workflow.review_openrouteservice(travel_input, key)
+
+        elif mode is TravelMode.GOOGLE:
             key = self.google_key.text().strip()
             if not key:
                 self.google_message.setText("Paste a Google Maps API key first.")
@@ -395,7 +536,18 @@ class TravelPage(QWidget):
         )
 
     def _calculate_reviewed(self, mode: TravelMode, review: TravelCoordinateReview) -> None:
-        if mode is TravelMode.GOOGLE:
+        if mode is TravelMode.COMMUNITY:
+
+            async def task(_worker):
+                return await self._workflow.calculate_community(review)
+
+        elif mode is TravelMode.OPENROUTESERVICE:
+            key = self.ors_key.text().strip()
+
+            async def task(_worker):
+                return await self._workflow.calculate_openrouteservice(review, key)
+
+        elif mode is TravelMode.GOOGLE:
             key = self.google_key.text().strip()
 
             async def task(_worker):
@@ -450,6 +602,14 @@ class TravelPage(QWidget):
         self._provider_result = result
 
     def _handle_provider_success(self, result: object) -> None:
+        if self._provider_operation == "community-test":
+            self.community_message.setText(
+                "Services are reachable. Shared capacity can still vary during calculation."
+            )
+            return
+        if self._provider_operation == "ors-test":
+            self.ors_message.setText("Connection successful. openrouteservice is ready.")
+            return
         if self._provider_operation == "google-test":
             self.google_message.setText(
                 "Connection successful. Google Geocoding and Routes are ready."
@@ -538,6 +698,16 @@ class TravelPage(QWidget):
         )
 
     def _set_provider_buttons_enabled(self, enabled: bool) -> None:
+        self.community_test_button.setEnabled(enabled)
+        self.community_calculate_button.setEnabled(enabled)
+        self.community_view_button.setEnabled(
+            enabled and self._controller.session.calculated_matrix is not None
+        )
+        self.ors_test_button.setEnabled(enabled)
+        self.ors_calculate_button.setEnabled(enabled)
+        self.ors_view_button.setEnabled(
+            enabled and self._controller.session.calculated_matrix is not None
+        )
         self.google_test_button.setEnabled(enabled)
         self.google_calculate_button.setEnabled(enabled)
         self.google_view_button.setEnabled(
@@ -550,7 +720,11 @@ class TravelPage(QWidget):
         self.manage_packs_button.setEnabled(enabled)
 
     def _message_for_mode(self, mode: TravelMode | None, message: str) -> None:
-        if mode is TravelMode.GOOGLE:
+        if mode is TravelMode.COMMUNITY:
+            self.community_message.setText(message)
+        elif mode is TravelMode.OPENROUTESERVICE:
+            self.ors_message.setText(message)
+        elif mode is TravelMode.GOOGLE:
             self.google_message.setText(message)
         elif mode is TravelMode.OFFLINE:
             self.offline_message.setText(message)
@@ -584,18 +758,45 @@ class TravelPage(QWidget):
         self._controller.session.set_travel_mode(mode)
         self._controller.notify()
 
+    def _select_online_card(self) -> None:
+        mode = self._controller.session.travel_mode
+        if mode not in {
+            TravelMode.COMMUNITY,
+            TravelMode.OPENROUTESERVICE,
+            TravelMode.GOOGLE,
+        }:
+            mode = TravelMode.COMMUNITY
+        self._set_mode(mode)
+
+    def _choose_online_and_review(self, mode: TravelMode) -> None:
+        self._set_mode(mode)
+        self._review_addresses(mode)
+
     def _sync_mode_cards(self) -> None:
         mode = self._controller.session.travel_mode
-        for card, card_mode in (
-            (self.manual_card, TravelMode.MANUAL),
-            (self.offline_card, TravelMode.OFFLINE),
-            (self.online_card, TravelMode.GOOGLE),
+        for card, card_modes in (
+            (self.manual_card, {TravelMode.MANUAL}),
+            (self.offline_card, {TravelMode.OFFLINE}),
+            (
+                self.online_card,
+                {
+                    TravelMode.COMMUNITY,
+                    TravelMode.OPENROUTESERVICE,
+                    TravelMode.GOOGLE,
+                },
+            ),
         ):
-            should_select = mode is card_mode
+            should_select = mode in card_modes
             if card.radio.isChecked() != should_select:
                 card.radio.setChecked(should_select)
         self.panels.setCurrentIndex(
-            {TravelMode.MANUAL: 0, TravelMode.OFFLINE: 1, TravelMode.GOOGLE: 2}[mode]
+            {
+                TravelMode.MANUAL: 0,
+                TravelMode.OFFLINE: 1,
+                TravelMode.COMMUNITY: 2,
+                TravelMode.OPENROUTESERVICE: 2,
+                TravelMode.GOOGLE: 2,
+            }[mode]
         )
 
     def refresh_page(self) -> None:
@@ -627,9 +828,12 @@ class TravelPage(QWidget):
         calculated_ready = (
             session.calculated_matrix is not None and not session.calculated_travel_is_stale
         )
-        self.google_calculate_button.setText(
+        calculate_text = (
             "Review and recalculate" if calculated_ready else "Review addresses and calculate"
         )
+        self.community_calculate_button.setText(calculate_text)
+        self.ors_calculate_button.setText(calculate_text)
+        self.google_calculate_button.setText(calculate_text)
         self.offline_calculate_button.setText(
             "Review and recalculate" if calculated_ready else "Review addresses and calculate"
         )
@@ -639,6 +843,8 @@ class TravelPage(QWidget):
             )
             has_calculated = session.calculated_matrix is not None
             self.offline_view_button.setEnabled(has_calculated)
+            self.community_view_button.setEnabled(has_calculated)
+            self.ors_view_button.setEnabled(has_calculated)
             self.google_view_button.setEnabled(has_calculated)
 
         if session.travel_mode is TravelMode.MANUAL:
