@@ -101,7 +101,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=False,
+    console=os.environ.get("SPP_BUILD_CONSOLE") == "1",
     icon=str(icon),
 )
 collection = COLLECT(
