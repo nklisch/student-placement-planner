@@ -1,4 +1,21 @@
 {
   "schema_version": 1,
-  "packs": []
+  "packs": [
+    {
+      "pack_id": "andorra",
+      "name": "Andorra",
+      "version": "2026.08",
+      "description": "Andorra offline roads and addresses from OpenStreetMap",
+      "valhalla_version": "3.8",
+      "bounds": [
+        1.407,
+        42.428,
+        1.787,
+        42.656
+      ],
+      "archive_url": "https://github.com/nklisch/student-placement-planner/releases/download/map-pack-andorra-2026.08/andorra-2026.08.spp-map-pack",
+      "archive_size": 1698383,
+      "archive_sha256": "032835ce6aaa866712303ebf12e02dfa196fbbac7e0a5e3291c038646f8d98ba"
+    }
+  ]
 }
