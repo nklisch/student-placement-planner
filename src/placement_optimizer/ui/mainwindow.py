@@ -428,14 +428,14 @@ class MainWindow(QMainWindow):
         locations_issues = self._area_issue_count(readiness, DraftArea.LOCATIONS)
         travel_issues = self._area_issue_count(readiness, DraftArea.TRAVEL)
 
-        if not session.students:
+        if not session.active_students:
             self.steps_model.set_status(0, "○")
         elif readiness.students_ready:
             self.steps_model.set_status(0, "✓")
         else:
             self.steps_model.set_status(0, "!", attention=students_issues > 0)
 
-        if not session.locations:
+        if not session.active_locations:
             self.steps_model.set_status(1, "○")
         elif readiness.locations_ready:
             self.steps_model.set_status(1, "✓")
@@ -586,13 +586,13 @@ class MainWindow(QMainWindow):
         session = self.controller.session
         actions: list[tuple[str, int]] = []
         if not readiness.students_ready:
-            if not session.students:
+            if not session.active_students:
                 actions.append(("Students — add your students", 0))
             else:
                 count = self._area_issue_count(readiness, DraftArea.STUDENTS)
                 actions.append((f"Students — {count} issue(s) need attention", 0))
         if not readiness.locations_ready:
-            if not session.locations:
+            if not session.active_locations:
                 actions.append(("Locations — add your locations", 1))
             else:
                 count = self._area_issue_count(readiness, DraftArea.LOCATIONS)
@@ -805,57 +805,9 @@ class MainWindow(QMainWindow):
         results_page = self.pages[4]
         if not results_page.has_usable_result():
             return
-        from html import escape
+        from placement_optimizer.ui.printing import ResultsPrintPreviewDialog
 
-        from PySide6.QtGui import QTextDocument
-        from PySide6.QtPrintSupport import QPrintDialog, QPrinter
-
-        outcome = results_page.outcome
-        project = results_page.project
-        student_names = {student.id: student.name for student in project.students}
-        location_names = {location.id: location.name for location in project.locations}
-        has_distances = any(
-            placement.distance_meters is not None for placement in outcome.result.placements
-        )
-        rendered_rows = []
-        for placement in outcome.result.placements:
-            values = [
-                student_names.get(placement.student_id, placement.student_id),
-                (
-                    location_names.get(placement.location_id or "", "Not placed")
-                    if placement.location_id
-                    else "Not placed"
-                ),
-                (
-                    "—"
-                    if placement.duration_seconds is None
-                    else f"{placement.duration_seconds / 60:.0f} min"
-                ),
-            ]
-            if has_distances:
-                values.append(
-                    "—"
-                    if placement.distance_meters is None
-                    else f"{placement.distance_meters / 1000:.1f} km"
-                )
-            rendered_rows.append(
-                "<tr>" + "".join(f"<td>{escape(value)}</td>" for value in values) + "</tr>"
-            )
-        rows = "".join(rendered_rows)
-        distance_header = "<th align='left'>Distance</th>" if has_distances else ""
-        document = QTextDocument()
-        document.setHtml(
-            f"<h2>{escape(project.name)} — Placements</h2>"
-            f"<p>{escape(outcome.message)}</p>"
-            "<table border='0' cellspacing='6'>"
-            "<tr><th align='left'>Student</th><th align='left'>Placement</th>"
-            f"<th align='left'>Drive</th>{distance_header}</tr>"
-            f"{rows}</table>"
-        )
-        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-        dialog = QPrintDialog(printer, self)
-        if dialog.exec():
-            document.print_(printer)
+        ResultsPrintPreviewDialog(results_page.outcome, results_page.project, self).exec()
 
     # --- sample data -------------------------------------------------------------
 

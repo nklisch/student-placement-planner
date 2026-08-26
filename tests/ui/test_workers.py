@@ -5,6 +5,19 @@ import asyncio
 from placement_optimizer.ui.workers import AsyncOperationWorker
 
 
+def test_async_operation_worker_preserves_large_download_counts() -> None:
+    async def operation(_worker):
+        return None
+
+    worker = AsyncOperationWorker(operation)
+    progress = []
+    worker.progress.connect(lambda completed, total, message: progress.append((completed, total)))
+
+    worker.report_progress(3 * 1024**3, 5 * 1024**3, "Downloading…")
+
+    assert progress == [(3 * 1024**3, 5 * 1024**3)]
+
+
 def test_async_operation_worker_cancels_active_network_style_task(qtbot) -> None:
     started = False
     cancelled = []

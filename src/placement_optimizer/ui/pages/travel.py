@@ -827,7 +827,7 @@ class TravelPage(QWidget):
         self.completeness_label.setText(f"Filled {filled} of {total}" if total else "")
         self.progress.setMaximum(max(total, 1))
         self.progress.setValue(filled)
-        has_grid = bool(session.students and session.locations)
+        has_grid = bool(session.active_students and session.active_locations)
         self.table.setVisible(has_grid)
         self.empty_hint.setVisible(not has_grid)
 
@@ -868,8 +868,8 @@ class TravelPage(QWidget):
         if session.travel_mode is TravelMode.MANUAL:
             if readiness.travel_ready:
                 self.status_label.setText(
-                    f"Travel times ready — {len(session.students)} students × "  # noqa: RUF001
-                    f"{len(session.locations)} locations"
+                    f"Travel times ready — {len(session.active_students)} students × "  # noqa: RUF001
+                    f"{len(session.active_locations)} locations"
                 )
             elif readiness.missing_travel_cells and has_grid:
                 self.status_label.setText(
@@ -881,8 +881,8 @@ class TravelPage(QWidget):
             self.status_label.setText("Needs updating after your latest changes.")
         elif readiness.travel_ready:
             self.status_label.setText(
-                f"Travel times ready — {len(session.students)} students × "  # noqa: RUF001
-                f"{len(session.locations)} locations"
+                f"Travel times ready — {len(session.active_students)} students × "  # noqa: RUF001
+                f"{len(session.active_locations)} locations"
             )
         else:
             self.status_label.setText("")
@@ -922,8 +922,8 @@ class TravelPage(QWidget):
             return
 
         session = self._controller.session
-        student_keys = {row.id.strip(): row.key for row in session.students}
-        location_keys = {row.id.strip(): row.key for row in session.locations}
+        student_keys = {row.id.strip(): row.key for row in session.active_students}
+        location_keys = {row.id.strip(): row.key for row in session.active_locations}
         self.model.undo.record()
         applied = 0
         unmatched = 0
@@ -971,7 +971,7 @@ class TravelPage(QWidget):
 
     def export_csv(self) -> None:
         session = self._controller.session
-        if not session.students or not session.locations:
+        if not session.active_students or not session.active_locations:
             self._host.show_toast("Add students and locations first.")
             return
         path = self._host.ask_save_csv(self, "Export driving times", "driving-times.csv")
@@ -980,8 +980,8 @@ class TravelPage(QWidget):
         output = io.StringIO(newline="")
         writer = csv.writer(output)
         writer.writerow(["student_id", "location_id", "driving_minutes", "distance_km"])
-        for student in session.students:
-            for location in session.locations:
+        for student in session.active_students:
+            for location in session.active_locations:
                 raw = session.manual_times.get((student.key, location.key), "").strip()
                 if not raw:
                     continue

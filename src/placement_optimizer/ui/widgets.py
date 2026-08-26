@@ -115,6 +115,7 @@ class Toast(QFrame):
         self.action_button = QPushButton("")
         self.action_button.setProperty("kind", "quiet")
         self.action_button.hide()
+        self._action: Callable[[], None] | None = None
         layout.addWidget(self.message)
         layout.addWidget(self.action_button)
         self._timer = QTimer(self)
@@ -131,11 +132,14 @@ class Toast(QFrame):
         duration_ms: int = 6000,
     ) -> None:
         self.message.setText(text)
+        if self._action is not None:
+            with suppress(RuntimeError, TypeError):
+                self.action_button.clicked.disconnect(self._action)
+            self._action = None
         if action_text and action is not None:
             self.action_button.setText(action_text)
-            with suppress(RuntimeError, TypeError):
-                self.action_button.clicked.disconnect()
             self.action_button.clicked.connect(action)
+            self._action = action
             self.action_button.show()
         else:
             self.action_button.hide()

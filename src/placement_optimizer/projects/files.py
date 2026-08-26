@@ -313,12 +313,16 @@ def _to_document(project: PlacementProject) -> dict[str, object]:
 
 
 def _draft_to_document(session: DraftSession) -> dict[str, object]:
+    students = session.active_students
+    locations = session.active_locations
+    student_keys = {row.key for row in students}
+    location_keys = {row.key for row in locations}
     matrix = session.calculated_matrix
     if matrix is not None and (
-        len(matrix.durations_seconds) != len(session.students)
-        or len(matrix.distances_meters) != len(session.students)
-        or any(len(row) != len(session.locations) for row in matrix.durations_seconds)
-        or any(len(row) != len(session.locations) for row in matrix.distances_meters)
+        len(matrix.durations_seconds) != len(students)
+        or len(matrix.distances_meters) != len(students)
+        or any(len(row) != len(locations) for row in matrix.durations_seconds)
+        or any(len(row) != len(locations) for row in matrix.distances_meters)
     ):
         # Structural roster edits leave keyed manual cells intact, but the old
         # positional provider matrix cannot be safely associated with new rows.
@@ -335,7 +339,7 @@ def _draft_to_document(session: DraftSession) -> dict[str, object]:
                 "address": row.address,
                 "coordinates": row.coordinates,
             }
-            for row in session.students
+            for row in students
         ],
         "locations": [
             {
@@ -347,7 +351,7 @@ def _draft_to_document(session: DraftSession) -> dict[str, object]:
                 "address": row.address,
                 "coordinates": row.coordinates,
             }
-            for row in session.locations
+            for row in locations
         ],
         "rules": _rules_document(session.rules),
         "optimization": _optimization_document(session.optimization),
@@ -355,6 +359,7 @@ def _draft_to_document(session: DraftSession) -> dict[str, object]:
         "manual_times": [
             {"student_key": key[0], "location_key": key[1], "value": value}
             for key, value in session.manual_times.items()
+            if key[0] in student_keys and key[1] in location_keys
         ],
         "manual_distances_meters": [
             {
@@ -363,6 +368,7 @@ def _draft_to_document(session: DraftSession) -> dict[str, object]:
                 "distance_meters": value,
             }
             for key, value in session.manual_distances_meters.items()
+            if key[0] in student_keys and key[1] in location_keys
         ],
         "calculated_matrix": (
             {

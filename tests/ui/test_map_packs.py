@@ -66,7 +66,7 @@ def test_pack_dialog_prepares_region_directly_from_geofabrik(qtbot, tmp_path, mo
     )
     dialog._regions = (region,)
     dialog._render_regions()
-    dialog.region_combo.setCurrentIndex(1)
+    dialog.region_combo.setCurrentIndex(0)
 
     async def prepare(selected, selected_store, _client, **_kwargs):
         assert selected == region
@@ -87,6 +87,49 @@ def test_pack_dialog_prepares_region_directly_from_geofabrik(qtbot, tmp_path, mo
     qtbot.waitUntil(lambda: dialog._worker is None, timeout=5000)
     assert activated == [pack]
     assert "ready to use offline" in dialog.status_label.text()
+
+
+def test_typed_region_name_selects_the_download_target(qtbot, tmp_path, monkeypatch) -> None:
+    store, _pack = _installed_pack(tmp_path)
+    monkeypatch.setattr(MapPackDialog, "refresh_source_regions", lambda _self: None)
+    dialog = MapPackDialog(store)
+    qtbot.addWidget(dialog)
+    andorra = GeofabrikRegion(
+        "andorra",
+        "Andorra",
+        "europe",
+        "https://download.geofabrik.de/europe/andorra-latest.osm.pbf",
+    )
+    albania = GeofabrikRegion(
+        "albania",
+        "Albania",
+        "europe",
+        "https://download.geofabrik.de/europe/albania-latest.osm.pbf",
+    )
+    dialog._regions = (albania, andorra)
+    dialog._render_regions()
+
+    dialog.region_combo.setEditText("Andorra")
+
+    assert dialog._selected_source_region() == andorra
+    assert dialog.prepare_region_button.isEnabled()
+
+    dialog.region_combo.setEditText("And")
+    assert dialog._selected_source_region() is None
+    assert not dialog.prepare_region_button.isEnabled()
+
+
+def test_large_region_progress_uses_a_safe_fixed_scale(qtbot, tmp_path, monkeypatch) -> None:
+    store, _pack = _installed_pack(tmp_path)
+    monkeypatch.setattr(MapPackDialog, "refresh_source_regions", lambda _self: None)
+    dialog = MapPackDialog(store)
+    qtbot.addWidget(dialog)
+
+    dialog._operation_progress(3 * 1024**3, 5 * 1024**3, "Downloading…")
+
+    assert dialog.progress.maximum() == 1000
+    assert dialog.progress.value() == 600
+    assert dialog.progress.format() == "3.0 GB of 5.0 GB"
 
 
 def test_pack_dialog_disables_incompatible_installed_pack(qtbot, tmp_path, monkeypatch) -> None:

@@ -71,7 +71,7 @@ Header:
 
 - Title: `Students`
 - Description: `The students who need a placement. Type rows, paste from a spreadsheet, or import a CSV.`
-- Actions: `Add student`, `Paste from spreadsheet`, `Import CSV…`
+- Actions: `Add student`, `Paste from spreadsheet`, `Import CSV…`, and a disabled-until-selected `Remove selected`
 - Quiet count at right.
 
 Columns:
@@ -100,6 +100,7 @@ A centered surface with:
 - A slim issue strip above the table lists clickable issues and jumps to their cells.
 - Imported invalid rows remain in the table using their original text and a marked left edge; users repair them in place.
 - More than 100 students produces a non-blocking note: the app is designed for 100, but does not refuse to continue.
+- An otherwise blank extra row containing only its automatically generated ID is ignored and identified as a blank ignored row in the count. As soon as any user field contains content, the row is intentional and missing required values block readiness normally.
 
 ## 4. Locations
 
@@ -176,7 +177,7 @@ Adding/removing students or locations preserves all unaffected cells and introdu
 
 `Download a map of your region once, then it works with no internet. Nothing is sent anywhere.`
 
-The panel lists the selected installed region and opens a map-pack manager for prepared-pack listing, resumable download/cancel, local file installation, compatibility status, integrity checks, and pack repair. Address matches are reviewed before local Valhalla calculation. A missing, corrupt, or incompatible pack disables only offline mode and offers another pack or travel mode.
+The panel lists the selected installed region and opens a map-pack manager for prepared-pack listing, resumable download/cancel, local file installation, compatibility status, integrity checks, and pack repair. Direct-region search accepts a completed suggestion or an exact unique region name; partial text never points at a previously selected region. Download and local-preparation phases remain visibly labeled, and byte progress supports extracts larger than 2 GB. Address matches are reviewed before local Valhalla calculation. A missing, corrupt, or incompatible pack disables only offline mode and offers another pack or travel mode.
 
 ### Online maps (Google)
 
@@ -206,7 +207,7 @@ Order:
 3. Conditional statistic cards.
 4. By student / By location toggle.
 5. Assignment table and capacity panel.
-6. Export CSV and Print actions.
+6. Export CSV and Print actions. Print opens a preview with `By student` and grouped `By placement` arrangements plus an `Include drive time and distance` option.
 
 ### Success
 
@@ -262,7 +263,7 @@ This section is normative for Students, Locations, manual times, and bulk choice
 - A paste block is one undo operation.
 - Validation runs after editing settles, never blocks typing, and updates issue/readiness state.
 - Add row: Ctrl/Cmd+Plus or Ctrl/Cmd+=.
-- Delete rows: Ctrl/Cmd+Minus.
+- Delete rows: Ctrl/Cmd+Minus, Edit → Delete rows, or the visible `Remove selected` roster action. Removal offers Undo and updates referenced rules as one operation.
 - CSV file drop onto a roster/location table behaves exactly like Import CSV.
 - Pasting split latitude and longitude columns into the combined coordinate column joins them as `latitude, longitude`; it keeps both values and avoids unnecessary repair.
 - Undo is scoped to table operations, paste blocks, and the most recent rule deletion. There is no complicated global cross-step command history.

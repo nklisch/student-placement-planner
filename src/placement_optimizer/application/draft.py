@@ -40,6 +40,7 @@ class StudentDraft:
     id: str = ""
     address: str = ""
     coordinates: str = ""
+    is_placeholder: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +52,7 @@ class LocationDraft:
     minimum_capacity: str = ""
     address: str = ""
     coordinates: str = ""
+    is_placeholder: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,6 +187,23 @@ class DraftSession:
         return session
 
     @property
+    def active_students(self) -> tuple[StudentDraft, ...]:
+        """Rows containing user-entered student information.
+
+        Rows begin as placeholders when the table creates them. Entering any
+        value turns one into an intentional row permanently, so clearing a row
+        later still exposes its missing required fields instead of hiding it.
+        """
+
+        return tuple(row for row in self.students if not _student_row_is_empty(row))
+
+    @property
+    def active_locations(self) -> tuple[LocationDraft, ...]:
+        """Rows containing user-entered location information."""
+
+        return tuple(row for row in self.locations if not _location_row_is_empty(row))
+
+    @property
     def is_modified(self) -> bool:
         return self.version != self.saved_version
 
@@ -219,35 +238,35 @@ class DraftSession:
         item = draft or StudentDraft(
             key=self._student_key(),
             id=self._next_id("S", (student.id for student in self.students)),
+            is_placeholder=True,
         )
         if any(student.key == item.key for student in self.students):
             item = replace(item, key=self._student_key())
         self.students.append(item)
-        self._bump(travel=True)
+        affects_project = not _student_row_is_empty(item)
+        self._bump(model=affects_project, travel=affects_project)
         return item
 
     def update_student(self, index: int, **changes: str) -> StudentDraft:
         original = self.students[index]
-        updated = replace(original, **changes)
+        started = not original.is_placeholder or any(value.strip() for value in changes.values())
+        updated = replace(original, is_placeholder=not started, **changes)
         self.students[index] = updated
         if original.id != updated.id:
             self.rules = _rename_student(self.rules, original.id, updated.id)
-        self._bump(travel=True)
+        affects_project = not _student_row_is_empty(original) or not _student_row_is_empty(updated)
+        self._bump(model=affects_project, travel=affects_project)
         return updated
 
     def remove_students(self, indexes: list[int]) -> None:
-        removed = {
-            self.students[index].id
-            for index in sorted(set(indexes))
-            if 0 <= index < len(self.students)
-        }
-        removed_keys = {
-            self.students[index].key
-            for index in sorted(set(indexes))
-            if 0 <= index < len(self.students)
-        }
+        index_set = {index for index in indexes if 0 <= index < len(self.students)}
+        if not index_set:
+            return
+        removed_rows = [self.students[index] for index in sorted(index_set)]
+        removed = {row.id for row in removed_rows}
+        removed_keys = {row.key for row in removed_rows}
         self.students[:] = [
-            student for index, student in enumerate(self.students) if index not in set(indexes)
+            student for index, student in enumerate(self.students) if index not in index_set
         ]
         self.manual_times = {
             key: value for key, value in self.manual_times.items() if key[0] not in removed_keys
@@ -257,37 +276,46 @@ class DraftSession:
             for key, value in self.manual_distances_meters.items()
             if key[0] not in removed_keys
         }
+        rules_before = self.rules
         self.rules = _without_students(self.rules, removed)
-        self._bump(travel=True)
+        affects_project = rules_before != self.rules or any(
+            not _student_row_is_empty(row) for row in removed_rows
+        )
+        self._bump(model=affects_project, travel=affects_project)
 
     def add_location(self, draft: LocationDraft | None = None) -> LocationDraft:
         item = draft or LocationDraft(
             key=self._location_key(),
             id=self._next_id("L", (location.id for location in self.locations)),
+            is_placeholder=True,
         )
         if any(location.key == item.key for location in self.locations):
             item = replace(item, key=self._location_key())
         self.locations.append(item)
-        self._bump(travel=True)
+        affects_project = not _location_row_is_empty(item)
+        self._bump(model=affects_project, travel=affects_project)
         return item
 
     def update_location(self, index: int, **changes: str) -> LocationDraft:
         original = self.locations[index]
-        updated = replace(original, **changes)
+        started = not original.is_placeholder or any(value.strip() for value in changes.values())
+        updated = replace(original, is_placeholder=not started, **changes)
         self.locations[index] = updated
         if original.id != updated.id:
             self.rules = _rename_location(self.rules, original.id, updated.id)
-        self._bump(travel=True)
+        affects_project = not _location_row_is_empty(original) or not _location_row_is_empty(
+            updated
+        )
+        self._bump(model=affects_project, travel=affects_project)
         return updated
 
     def remove_locations(self, indexes: list[int]) -> None:
-        index_set = set(indexes)
-        removed = {
-            self.locations[index].id for index in index_set if 0 <= index < len(self.locations)
-        }
-        removed_keys = {
-            self.locations[index].key for index in index_set if 0 <= index < len(self.locations)
-        }
+        index_set = {index for index in indexes if 0 <= index < len(self.locations)}
+        if not index_set:
+            return
+        removed_rows = [self.locations[index] for index in sorted(index_set)]
+        removed = {row.id for row in removed_rows}
+        removed_keys = {row.key for row in removed_rows}
         self.locations[:] = [
             location for index, location in enumerate(self.locations) if index not in index_set
         ]
@@ -299,8 +327,12 @@ class DraftSession:
             for key, value in self.manual_distances_meters.items()
             if key[1] not in removed_keys
         }
+        rules_before = self.rules
         self.rules = _without_locations(self.rules, removed)
-        self._bump(travel=True)
+        affects_project = rules_before != self.rules or any(
+            not _location_row_is_empty(row) for row in removed_rows
+        )
+        self._bump(model=affects_project, travel=affects_project)
 
     def set_rules(self, rules: AssignmentRules) -> None:
         if rules != self.rules:
@@ -358,12 +390,29 @@ class DraftSession:
         )
 
     def restore_grid_snapshot(self, snapshot: DraftGridSnapshot) -> None:
+        previous_roster = (self.active_students, self.active_locations)
+        previous_model = (
+            previous_roster,
+            self.rules,
+            self.manual_times,
+            self.manual_distances_meters,
+        )
         self.students[:] = snapshot.students
         self.locations[:] = snapshot.locations
         self.rules = snapshot.rules
         self.manual_times = dict(snapshot.manual_times)
         self.manual_distances_meters = dict(snapshot.manual_distances_meters)
-        self._bump(travel=True)
+        current_roster = (self.active_students, self.active_locations)
+        current_model = (
+            current_roster,
+            self.rules,
+            self.manual_times,
+            self.manual_distances_meters,
+        )
+        self._bump(
+            model=previous_model != current_model,
+            travel=previous_roster != current_roster,
+        )
 
     def set_calculated_matrix(self, matrix: TravelMatrix) -> None:
         self.calculated_matrix = matrix
@@ -426,7 +475,7 @@ class DraftSession:
             else:
                 travel_matrix = self.calculated_matrix
         else:
-            missing_travel_cells = len(self.students) * len(self.locations)
+            missing_travel_cells = len(self.active_students) * len(self.active_locations)
 
         travel_ready = (
             students_ready
@@ -460,7 +509,7 @@ class DraftSession:
     def _validated_students(self, issues: list[DraftIssue]) -> tuple[Student, ...]:
         result: list[Student] = []
         seen: set[str] = set()
-        for row in self.students:
+        for row in self.active_students:
             student_id = row.id.strip()
             name = row.name.strip()
             if not student_id:
@@ -482,7 +531,7 @@ class DraftSession:
     def _validated_locations(self, issues: list[DraftIssue]) -> tuple[Location, ...]:
         result: list[Location] = []
         seen: set[str] = set()
-        for row in self.locations:
+        for row in self.active_locations:
             location_id = row.id.strip()
             name = row.name.strip()
             if not location_id:
@@ -543,9 +592,9 @@ class DraftSession:
     ) -> tuple[TravelMatrix | None, int]:
         durations: list[list[int | None]] = []
         missing = 0
-        for student in self.students:
+        for student in self.active_students:
             duration_row: list[int | None] = []
-            for location in self.locations:
+            for location in self.active_locations:
                 raw = self.manual_times.get((student.key, location.key), "").strip()
                 if not raw:
                     missing += 1
@@ -582,9 +631,9 @@ class DraftSession:
         distances = tuple(
             tuple(
                 self.manual_distances_meters.get((student.key, location.key))
-                for location in self.locations
+                for location in self.active_locations
             )
-            for student in self.students
+            for student in self.active_students
         )
         return (
             TravelMatrix(
@@ -596,13 +645,15 @@ class DraftSession:
         )
 
     def _load_matrix_into_manual_times(self, matrix: TravelMatrix) -> None:
-        if len(matrix.durations_seconds) != len(self.students):
+        students = self.active_students
+        locations = self.active_locations
+        if len(matrix.durations_seconds) != len(students):
             return
-        for student_index, student in enumerate(self.students):
+        for student_index, student in enumerate(students):
             row = matrix.durations_seconds[student_index]
-            if len(row) != len(self.locations):
+            if len(row) != len(locations):
                 return
-            for location_index, location in enumerate(self.locations):
+            for location_index, location in enumerate(locations):
                 duration = row[location_index]
                 key = (student.key, location.key)
                 self.manual_times[key] = "x" if duration is None else f"{duration / 60:g}"
@@ -639,6 +690,14 @@ class DraftSession:
         while f"{prefix}{number:03d}" in used:
             number += 1
         return f"{prefix}{number:03d}"
+
+
+def _student_row_is_empty(row: StudentDraft) -> bool:
+    return row.is_placeholder
+
+
+def _location_row_is_empty(row: LocationDraft) -> bool:
+    return row.is_placeholder
 
 
 def _next_key_number(prefix: str, keys: Iterable[str]) -> int:

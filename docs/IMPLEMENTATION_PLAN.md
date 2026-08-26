@@ -187,6 +187,13 @@ UI design and implementation follow the restricted model roles in `docs/BUILD_IN
 
 **Gate:** clean Windows/macOS users can install, complete a sample run, export results, and recover from expected failures without technical help.
 
+### Post-beta usability follow-up
+
+- [x] Add a print preview with student-first and placement-grouped layouts and optional driving columns.
+- [x] Make student/location removal visible alongside the roster entry actions while retaining keyboard/menu removal and Undo.
+- [x] Ignore automatic-ID-only extra rows, while retaining blocking validation for any substantively started row.
+- [x] Repair direct-region typeahead selection and make large-download/preparation progress explicit and safe above 2 GB.
+
 ## 7. Performance budgets
 
 These are user-experience targets, not premature microbenchmarks:

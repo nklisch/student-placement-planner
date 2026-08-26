@@ -345,10 +345,10 @@ class ManualTimesModel(QAbstractTableModel):
         return self._controller.session
 
     def rowCount(self, parent: QModelIndex | None = None) -> int:
-        return 0 if parent is not None and parent.isValid() else len(self._session.students)
+        return 0 if parent is not None and parent.isValid() else len(self._session.active_students)
 
     def columnCount(self, parent: QModelIndex | None = None) -> int:
-        return 0 if parent is not None and parent.isValid() else len(self._session.locations)
+        return 0 if parent is not None and parent.isValid() else len(self._session.active_locations)
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
@@ -356,7 +356,10 @@ class ManualTimesModel(QAbstractTableModel):
         return Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsEditable
 
     def _pair_key(self, row: int, column: int) -> tuple[str, str]:
-        return (self._session.students[row].key, self._session.locations[column].key)
+        return (
+            self._session.active_students[row].key,
+            self._session.active_locations[column].key,
+        )
 
     def _issues(self) -> dict[str, str]:
         session = self._session
@@ -408,12 +411,12 @@ class ManualTimesModel(QAbstractTableModel):
         self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole
     ):
         if orientation is Qt.Orientation.Horizontal:
-            draft = self._session.locations[section]
+            draft = self._session.active_locations[section]
             label = draft.name.strip() or draft.id.strip() or f"Location {section + 1}"
             if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.ToolTipRole):
                 return label
         else:
-            draft = self._session.students[section]
+            draft = self._session.active_students[section]
             label = draft.name.strip() or draft.id.strip() or f"Student {section + 1}"
             if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.ToolTipRole):
                 return label

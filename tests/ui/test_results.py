@@ -13,6 +13,12 @@ from placement_optimizer.optimization import (
     SolveProof,
 )
 from placement_optimizer.ui.pages.results import format_drive
+from placement_optimizer.ui.printing import (
+    PrintLayout,
+    PrintOptions,
+    ResultsPrintPreviewDialog,
+    build_results_print_html,
+)
 
 HORIZONTAL = Qt.Orientation.Horizontal
 
@@ -145,6 +151,78 @@ def test_choice_column_only_when_choices_exist(ready_window) -> None:
         for column in range(window.pages[4].student_table.model().columnCount())
     ]
     assert "Choice" not in headers
+
+
+def test_print_html_can_hide_driving_information(ready_window) -> None:
+    project = ready_window.controller.session.build_project().project
+    student = project.students[0]
+    location = project.locations[0]
+    outcome = SolveProjectOutcome(
+        OutcomeKind.SUCCESS,
+        "Every rule is satisfied.",
+        _result(placements=(Placement(student.id, location.id, 300, 1_250, None, False),)),
+    )
+
+    with_driving = build_results_print_html(outcome, project, PrintOptions())
+    without_driving = build_results_print_html(
+        outcome,
+        project,
+        PrintOptions(include_driving=False),
+    )
+
+    assert "Drive" in with_driving
+    assert "Distance" in with_driving
+    assert "5 min" in with_driving
+    assert "Drive" not in without_driving
+    assert "Distance" not in without_driving
+    assert student.name in without_driving
+    assert location.name in without_driving
+
+
+def test_print_preview_exposes_layout_and_driving_options(ready_window, qtbot) -> None:
+    project = ready_window.controller.session.build_project().project
+    student = project.students[0]
+    location = project.locations[0]
+    outcome = SolveProjectOutcome(
+        OutcomeKind.SUCCESS,
+        "",
+        _result(placements=(Placement(student.id, location.id, 300, None, None, False),)),
+    )
+    dialog = ResultsPrintPreviewDialog(outcome, project, ready_window)
+    qtbot.addWidget(dialog)
+
+    assert dialog.print_options() == PrintOptions()
+    dialog.layout_combo.setCurrentIndex(1)
+    dialog.include_driving.setChecked(False)
+    assert dialog.print_options() == PrintOptions(PrintLayout.BY_PLACEMENT, False)
+
+
+def test_print_html_can_group_students_by_placement(ready_window) -> None:
+    project = ready_window.controller.session.build_project().project
+    first, second = project.students[:2]
+    location = project.locations[0]
+    outcome = SolveProjectOutcome(
+        OutcomeKind.NEEDS_ATTENTION,
+        "One student is not placed.",
+        _result(
+            placements=(
+                Placement(first.id, location.id, 300, None, None, False),
+                Placement(second.id, None, None, None, None, False),
+            )
+        ),
+    )
+
+    html = build_results_print_html(
+        outcome,
+        project,
+        PrintOptions(layout=PrintLayout.BY_PLACEMENT, include_driving=False),
+    )
+
+    assert f"{location.name} <span class='muted'>— 1 of {location.capacity}</span>" in html
+    assert "Not placed <span class='muted'>— 1</span>" in html
+    assert html.index(location.name) < html.index("Not placed")
+    assert first.name in html
+    assert second.name in html
 
 
 def test_road_distance_column_appears_when_provider_supplies_it(ready_window) -> None:

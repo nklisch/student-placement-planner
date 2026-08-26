@@ -6,7 +6,11 @@ from PySide6.QtCore import QEvent, Qt
 
 from placement_optimizer.application import DraftArea
 from placement_optimizer.optimization import AssignmentRules, GroupRule, Preference
-from placement_optimizer.ui.tablemodels import LocationsTableModel, StudentsTableModel
+from placement_optimizer.ui.tablemodels import (
+    LocationsTableModel,
+    ManualTimesModel,
+    StudentsTableModel,
+)
 from placement_optimizer.ui.tableview import PasteTableView
 
 EDIT = Qt.ItemDataRole.EditRole
@@ -100,6 +104,31 @@ def test_clear_cells_and_undo_restores(controller) -> None:
     assert model.undo.undo()
     assert controller.session.students[0].name == "Alice"
     assert controller.session.students[0].id == "s1"
+
+
+def test_manual_grid_ignores_id_only_extra_rows(controller) -> None:
+    students = StudentsTableModel(controller)
+    locations = LocationsTableModel(controller)
+    students.paste_block(0, 0, "Alice\ts1")
+    locations.paste_block(0, 0, "Library\tl1\t1")
+    controller.session.add_student()
+    controller.session.add_location()
+
+    manual = ManualTimesModel(controller)
+
+    assert manual.rowCount() == 1
+    assert manual.columnCount() == 1
+
+
+def test_roster_page_has_a_visible_remove_action(ready_window, qtbot) -> None:
+    page = ready_window.pages[0]
+    initial = len(ready_window.controller.session.students)
+    page.table.selectRow(0)
+    assert page.remove_button.isEnabled()
+
+    qtbot.mouseClick(page.remove_button, Qt.MouseButton.LeftButton)
+
+    assert len(ready_window.controller.session.students) == initial - 1
 
 
 def test_deleting_a_referenced_row_cleans_rules_and_undo_restores_both(controller) -> None:

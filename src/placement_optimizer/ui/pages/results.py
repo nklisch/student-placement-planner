@@ -207,7 +207,9 @@ class ResultsPage(QWidget):
         self.export_button.setToolTip("Save the current assignments in a spreadsheet-ready file.")
         self.export_button.clicked.connect(self._host.export_results)
         self.print_button = QPushButton("Print…")
-        self.print_button.setToolTip("Open the system print dialog for the current assignments.")
+        self.print_button.setToolTip(
+            "Preview the assignments, choose how to arrange them, and print."
+        )
         self.print_button.clicked.connect(self._host.print_results)
         actions.addWidget(self.export_button)
         actions.addWidget(self.print_button)

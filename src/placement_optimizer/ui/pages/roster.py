@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from placement_optimizer.application import DraftIssue
+from placement_optimizer.application import DraftArea, DraftIssue
 from placement_optimizer.projects import ImportBatch, parse_locations_csv, parse_students_csv
 from placement_optimizer.ui.controller import SessionController
 from placement_optimizer.ui.tablemodels import (
@@ -115,9 +115,16 @@ class RosterPage(QWidget):
             "Import a CSV file. Rows with problems stay visible so you can repair them."
         )
         self.import_button.clicked.connect(self.import_csv)
+        self.remove_button = QPushButton("Remove selected")
+        self.remove_button.setToolTip(
+            "Remove the selected students or locations. You can undo the removal."
+        )
+        self.remove_button.clicked.connect(self.delete_selected_rows)
+        self.remove_button.setEnabled(False)
         actions.addWidget(self.add_button)
         actions.addWidget(self.paste_button)
         actions.addWidget(self.import_button)
+        actions.addWidget(self.remove_button)
         actions.addStretch(1)
         layout.addLayout(actions)
 
@@ -128,6 +135,9 @@ class RosterPage(QWidget):
 
         self.table = PasteTableView()
         self.table.setModel(self.model)
+        self.table.selectionModel().selectionChanged.connect(
+            lambda _selected, _deselected: self._update_remove_button()
+        )
         self._configure_columns()
         self.table.fileDropped.connect(self.import_csv_path)
         self.table.setAccessibleName(f"{self.TITLE} table")
@@ -177,16 +187,21 @@ class RosterPage(QWidget):
         self.table.paste_from_clipboard()
 
     def delete_selected_rows(self) -> None:
-        rows = self.table.selected_rows()
+        rows = [row for row in self.table.selected_rows() if row < len(self.model._rows())]
         if not rows:
             return
         rules_cleaned = self.model.delete_rows(rows)
+        count = len(set(rows))
+        message = f"Removed {count} {self._count_word(count)}."
         if rules_cleaned:
-            self._host.show_toast(
-                "Rules that mentioned removed rows were updated.",
-                "Undo",
-                self.model.undo.undo,
-            )
+            message += " Related rules were updated."
+        self._host.show_toast(message, "Undo", self.model.undo.undo)
+        self._update_remove_button()
+
+    def _update_remove_button(self) -> None:
+        self.remove_button.setEnabled(
+            any(row < len(self.model._rows()) for row in self.table.selected_rows())
+        )
 
     # --- CSV import ---------------------------------------------------------
 
@@ -264,8 +279,17 @@ class RosterPage(QWidget):
 
     def refresh_page(self) -> None:
         rows = len(self.model._rows())
-        self.count_label.setText(f"{rows} {self._count_word(rows)}" if rows else "")
+        active_rows = self._active_row_count()
+        ignored_rows = rows - active_rows
+        count_parts = []
+        if active_rows:
+            count_parts.append(f"{active_rows} {self._count_word(active_rows)}")
+        if ignored_rows:
+            suffix = "row" if ignored_rows == 1 else "rows"
+            count_parts.append(f"{ignored_rows} blank {suffix} ignored")
+        self.count_label.setText(" · ".join(count_parts))
         self.stack.setCurrentWidget(self.table if rows else self.empty_state)
+        self._update_remove_button()
         issues = [
             issue
             for issue in self._controller.session.readiness().issues
@@ -273,6 +297,15 @@ class RosterPage(QWidget):
         ]
         self.issue_strip.set_issues(issues, self._describe_issue)
         self.note_strip.show_text(self._note_text())
+
+    def _active_row_count(self) -> int:
+        session = self._controller.session
+        rows = (
+            session.active_students
+            if self.model.AREA is DraftArea.STUDENTS
+            else session.active_locations
+        )
+        return len(rows)
 
     def _count_word(self, count: int) -> str:
         return self.COUNT_SINGULAR if count == 1 else self.COUNT_PLURAL
@@ -356,7 +389,7 @@ class StudentsPage(RosterPage):
         )
 
     def _note_text(self) -> str:
-        rows = len(self.model._rows())
+        rows = len(self._controller.session.active_students)
         if rows > 100:
             return (
                 f"This app is designed for up to 100 students. You can keep going with {rows}, "
@@ -411,11 +444,11 @@ class LocationsPage(RosterPage):
 
     def _note_text(self) -> str:
         session = self._controller.session
-        students = len(session.students)
-        if not students or not session.locations:
+        students = len(session.active_students)
+        if not students or not session.active_locations:
             return ""
         capacity = 0
-        for row in session.locations:
+        for row in session.active_locations:
             try:
                 capacity += max(0, int(row.capacity))
             except ValueError:

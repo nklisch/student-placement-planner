@@ -173,7 +173,7 @@ HELP_TOPICS = (
             ),
             HelpEntry(
                 "Using maps",
-                "Download an OpenStreetMap region directly from Geofabrik and let the app prepare it for offline use, use the occasional-use community option with no key, or connect openrouteservice or Google. Online services receive only addresses or coordinates—never names, IDs, choices, capacities, or rules. Every map option lets you review address matches before calculation.",
+                "Download an OpenStreetMap region directly from Geofabrik and let the app prepare it for offline use, use the occasional-use community option with no key, or connect openrouteservice or Google. Type a direct region name and choose a matching suggestion; download and preparation progress stays visible in the region window. Online services receive only addresses or coordinates—never names, IDs, choices, capacities, or rules. Every map option lets you review address matches before calculation.",
             ),
         ),
     ),
@@ -192,6 +192,10 @@ HELP_TOPICS = (
             HelpEntry(
                 "Results became out of date",
                 "Your previous result stays visible when you change your data. Select Update placements to calculate it again.",
+            ),
+            HelpEntry(
+                "Print preview",
+                "Print opens a preview. Arrange the list by student or group it by placement, and turn off drive time and distance when you only need the names.",
             ),
         ),
     ),
@@ -213,11 +217,11 @@ HELP_TOPICS = (
             ),
             HelpEntry(
                 "Clear cells",
-                "Select cells and press Delete or Backspace. Use Edit → Delete rows when you want to remove whole students or locations.",
+                "Select cells and press Delete or Backspace. To remove whole students or locations, select their rows and use Remove selected or Edit → Delete rows.",
             ),
             HelpEntry(
                 "Repair errors",
-                "Text the table can't use is kept in the cell and marked, not deleted. Hover the marked cell for the problem, or select an issue above the table to jump to it.",
+                "Text the table can't use is kept in the cell and marked, not deleted. Hover the marked cell for the problem, or select an issue above the table to jump to it. An untouched extra row with only its automatic ID is ignored; any row you start filling must have its required values.",
             ),
             HelpEntry(
                 "Undo",

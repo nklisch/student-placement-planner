@@ -26,7 +26,9 @@ class AsyncOperationWorker(QThread):
     succeeded = Signal(object)
     failed = Signal(str)
     cancelled_operation = Signal()
-    progress = Signal(int, int, str)
+    # Qt's `int` signal type is signed 32-bit; regional map extracts can be
+    # larger than 2 GB, so preserve byte counts as Python integers.
+    progress = Signal(object, object, str)
 
     def __init__(self, task: AsyncTask, parent: QObject | None = None) -> None:
         super().__init__(parent)

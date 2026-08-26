@@ -111,18 +111,23 @@ class MapPackDialog(QDialog):
         self.region_combo = QComboBox()
         self.region_combo.setEditable(True)
         self.region_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.region_combo.lineEdit().setPlaceholderText("Search countries, states, or regions")
         self.region_combo.completer().setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.region_combo.completer().setFilterMode(Qt.MatchFlag.MatchContains)
         self.region_combo.setAccessibleName("OpenStreetMap regions from Geofabrik")
         self.region_combo.currentIndexChanged.connect(lambda _index: self._update_actions())
-        self.prepare_region_button = QPushButton("Download and prepare selected region")
+        self.region_combo.editTextChanged.connect(lambda _text: self._update_actions())
+        self.prepare_region_button = QPushButton("Download and prepare this region")
         self.prepare_region_button.clicked.connect(self._prepare_selected_region)
         self.refresh_regions_button = QPushButton("Refresh OpenStreetMap list")
         self.refresh_regions_button.clicked.connect(self.refresh_source_regions)
         direct_row.addWidget(self.region_combo, stretch=1)
-        direct_row.addWidget(self.prepare_region_button)
         direct_row.addWidget(self.refresh_regions_button)
         layout.addLayout(direct_row)
+        prepare_row = QHBoxLayout()
+        prepare_row.addWidget(self.prepare_region_button)
+        prepare_row.addStretch(1)
+        layout.addLayout(prepare_row)
 
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
@@ -141,7 +146,7 @@ class MapPackDialog(QDialog):
         layout.addWidget(attribution)
 
         bottom = QHBoxLayout()
-        self.cancel_button = QPushButton("Cancel download")
+        self.cancel_button = QPushButton("Cancel download or preparation")
         self.cancel_button.clicked.connect(self._cancel_operation)
         self.cancel_button.hide()
         close_button = QPushButton("Close")
@@ -191,21 +196,31 @@ class MapPackDialog(QDialog):
         self.download_button.setEnabled(bool(self._catalog.packs) and self._worker is None)
 
     def _render_regions(self) -> None:
-        selected = self.region_combo.currentData()
-        selected_id = selected.region_id if isinstance(selected, GeofabrikRegion) else ""
+        selected = self._selected_source_region()
+        selected_id = selected.region_id if selected is not None else ""
         self.region_combo.blockSignals(True)
         self.region_combo.clear()
-        self.region_combo.addItem("Type a country, state, or region…", None)
-        selected_index = 0
+        selected_index = -1
         for region in self._regions:
             self.region_combo.addItem(region.display_name, region)
             if region.region_id == selected_id:
                 selected_index = self.region_combo.count() - 1
         self.region_combo.setCurrentIndex(selected_index)
+        if selected_index < 0:
+            self.region_combo.setEditText("")
         self.region_combo.blockSignals(False)
-        self.prepare_region_button.setEnabled(
-            isinstance(self.region_combo.currentData(), GeofabrikRegion) and self._worker is None
-        )
+        self._update_actions()
+
+    def _selected_source_region(self) -> GeofabrikRegion | None:
+        text = self.region_combo.currentText().strip().casefold()
+        if not text:
+            return None
+        exact = [
+            region
+            for region in self._regions
+            if text in {region.display_name.casefold(), region.name.casefold()}
+        ]
+        return exact[0] if len(exact) == 1 else None
 
     def refresh_source_regions(self) -> None:
         if self._worker is not None:
@@ -232,8 +247,8 @@ class MapPackDialog(QDialog):
         )
 
     def _prepare_selected_region(self) -> None:
-        region = self.region_combo.currentData()
-        if not isinstance(region, GeofabrikRegion) or self._worker is not None:
+        region = self._selected_source_region()
+        if region is None or self._worker is not None:
             return
         answer = QMessageBox.question(
             self,
@@ -369,6 +384,8 @@ class MapPackDialog(QDialog):
         self._worker.progress.connect(self._operation_progress)
         self._worker.finished.connect(self._operation_finished)
         self.status_label.setText(status)
+        if operation == "source-install":
+            self.prepare_region_button.setText("Downloading and preparing…")
         self.progress.setRange(0, 0)
         self.progress.show()
         self.cancel_button.setVisible(cancellable)
@@ -383,7 +400,8 @@ class MapPackDialog(QDialog):
         ):
             self._regions = result
             self.status_label.setText(
-                f"{len(result)} OpenStreetMap region(s) are available directly from Geofabrik."
+                f"{len(result)} OpenStreetMap regions loaded. Start typing above, choose a "
+                "matching region, then select Download and prepare."
             )
         elif self._operation == "catalog" and isinstance(result, MapPackCatalog):
             self._catalog = result
@@ -426,8 +444,11 @@ class MapPackDialog(QDialog):
             self.progress.setRange(0, 0)
             self.progress.setFormat("")
         else:
-            self.progress.setRange(0, total)
-            self.progress.setValue(min(completed, total))
+            # QProgressBar uses signed 32-bit values, while regional extracts can
+            # exceed 2 GB. A fixed scale keeps large downloads observable.
+            scale = 1000
+            self.progress.setRange(0, scale)
+            self.progress.setValue(min(scale, round(completed / total * scale)))
             self.progress.setFormat(f"{_format_size(completed)} of {_format_size(total)}")
 
     def _operation_finished(self) -> None:
@@ -437,6 +458,7 @@ class MapPackDialog(QDialog):
             worker.deleteLater()
         self.progress.hide()
         self.cancel_button.hide()
+        self.prepare_region_button.setText("Download and prepare this region")
         self.cancel_button.setEnabled(True)
         self._update_actions()
         self._render_catalog()
@@ -468,7 +490,7 @@ class MapPackDialog(QDialog):
         self.download_button.setEnabled(idle and bool(self._catalog.packs))
         self.refresh_regions_button.setEnabled(idle)
         self.prepare_region_button.setEnabled(
-            idle and isinstance(self.region_combo.currentData(), GeofabrikRegion)
+            idle and self._selected_source_region() is not None
         )
 
     def closeEvent(self, event) -> None:

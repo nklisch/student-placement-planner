@@ -77,6 +77,51 @@ def test_public_grid_snapshot_restores_rows_times_and_distances() -> None:
     assert session.manual_distances_meters["student-a", "location-a"] == 3200
 
 
+def test_id_only_extra_rows_are_ignored_but_partial_rows_block() -> None:
+    session = ready_session()
+    session.mark_result()
+    model_version = session.model_version
+    travel_version = session.travel_input_version
+    ignored_student = session.add_student()
+    ignored_location = session.add_location()
+
+    built = session.build_project()
+
+    assert built.readiness.ready
+    assert built.project is not None
+    assert len(built.project.students) == 2
+    assert len(built.project.locations) == 2
+    assert ignored_student not in session.active_students
+    assert ignored_location not in session.active_locations
+    assert session.model_version == model_version
+    assert session.travel_input_version == travel_version
+    assert not session.results_are_stale
+
+    session.update_student(2, id="custom-student")
+    session.update_location(2, id="custom-location")
+    assert not session.readiness().ready
+
+    session.update_student(2, id=ignored_student.id, address="3 Partial Street")
+    session.update_location(2, id=ignored_location.id, capacity="1")
+    readiness = session.readiness()
+
+    assert not readiness.ready
+    assert any(
+        issue.row_key == ignored_student.key and issue.field == "name"
+        for issue in readiness.issues
+    )
+    assert any(
+        issue.row_key == ignored_location.key and issue.field == "name"
+        for issue in readiness.issues
+    )
+
+    session.update_student(2, address="")
+    session.update_location(2, capacity="")
+    assert ignored_student.key in {row.key for row in session.active_students}
+    assert ignored_location.key in {row.key for row in session.active_locations}
+    assert not session.readiness().ready
+
+
 def test_invalid_rows_and_cells_remain_in_draft_state() -> None:
     session = ready_session()
     session.update_location(0, capacity="")
@@ -162,6 +207,20 @@ def test_deleting_referenced_rows_cleans_rules_and_keeps_session_usable() -> Non
     assert session.rules.together == ()
     assert session.rules.pinned == ()
     assert session.rules.preferences == (Preference("s1", ("l2",)),)
+
+
+def test_saving_drops_ignored_extra_rows(tmp_path) -> None:
+    session = ready_session()
+    session.add_student()
+    session.add_location()
+    path = tmp_path / "without-extra-rows.spp"
+
+    save_draft_session(session, path)
+    restored = load_draft_session(path)
+
+    assert len(restored.students) == 2
+    assert len(restored.locations) == 2
+    assert restored.build_project().readiness.ready
 
 
 def test_incomplete_draft_file_round_trip_preserves_raw_rows_and_cells(tmp_path) -> None:
