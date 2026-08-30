@@ -16,7 +16,15 @@ def test_save_and_open_round_trip(ready_window, qtbot, tmp_path) -> None:
     session = window.controller.session
     assert session.name == "Sample project"
     assert len(session.students) == 8
-    assert len(session.locations) == 4
+    assert [row.name for row in session.locations] == [
+        "Target Loveland",
+        "Walmart Supercenter Loveland",
+        "Whole Foods Market Fort Collins",
+        "The Home Depot North Fort Collins",
+    ]
+    assert session.locations[0].address == "1725 Rocky Mountain Ave, Loveland, CO 80538"
+    assert session.locations[2].address == "2201 S College Ave, Fort Collins, CO 80525"
+    assert all(row.coordinates for row in (*session.students, *session.locations))
     assert not session.is_modified
     assert session.readiness().ready
 
