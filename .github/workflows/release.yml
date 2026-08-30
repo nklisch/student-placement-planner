@@ -336,9 +336,9 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           cat > release-notes.md <<'EOF'
-          Beta 3 adds placement-result print preview with student and placement-grouped layouts, an option to omit driving columns, visible student/location removal with Undo, and harmless ignored extra rows that still validate as soon as they are started.
+          Beta 4 replaces the generic example with verified northern Colorado care facilities: four Cottonwood locations, Good Samaritan Fort Collins and Loveland, and North Shore Loveland. Sample people are now unmistakably fictional, and the bundled coordinates and road times match the example addresses.
 
-          Offline-region search and feedback are clearer, and large Geofabrik downloads now report progress safely beyond 2 GB. The Windows installer remains self-contained and is tested with packaged optimization before and after installation.
+          This beta also includes placement-result print preview, visible student/location removal with Undo, ignored untouched extra rows, clearer offline-region feedback, and safe progress reporting for map downloads larger than 2 GB.
 
           Windows and macOS builds use preview signatures unless their attached `SIGNING` files say otherwise. Checksums and GitHub build attestations are included with the release.
           EOF
