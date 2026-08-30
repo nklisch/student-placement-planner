@@ -14,61 +14,91 @@ from placement_optimizer.optimization import AssignmentRules, Preference
 from placement_optimizer.projects import parse_locations_csv, parse_matrix_csv, parse_students_csv
 
 SAMPLE_STUDENTS_CSV = """student_id,name,address,latitude,longitude
-s1,Aisha Khan,"300 N Adams Ave, Loveland, CO 80537",40.3974971,-105.0692592
-s2,Mateo Ruiz,"503 N Lincoln Ave, Loveland, CO 80537",40.3966195,-105.0733009
-s3,Ana Petrova,"700 E 4th St, Loveland, CO 80537",40.3946665,-105.0672849
-s4,Liam O'Brien,"5971 Sky Pond Dr, Loveland, CO 80538",40.4157174,-104.989151
-s5,Grace Nakamura,"201 Peterson St, Fort Collins, CO 80524",40.5849487,-105.0726563
-s6,Noah Williams,"408 Mason Ct, Fort Collins, CO 80524",40.5934306,-105.0780625
-s7,Zara Ahmed,"2145 Centre Ave, Fort Collins, CO 80526",40.5613001,-105.0856453
-s8,Oliver Chen,"215 E Foothills Pkwy, Fort Collins, CO 80525",40.544534,-105.073685
+s1,Example Student 01,"300 N Adams Ave, Loveland, CO 80537",40.3974971,-105.0692592
+s2,Example Student 02,"503 N Lincoln Ave, Loveland, CO 80537",40.3966195,-105.0733009
+s3,Example Student 03,"700 E 4th St, Loveland, CO 80537",40.3946665,-105.0672849
+s4,Example Student 04,"5971 Sky Pond Dr, Loveland, CO 80538",40.4157174,-104.989151
+s5,Example Student 05,"201 Peterson St, Fort Collins, CO 80524",40.5849487,-105.0726563
+s6,Example Student 06,"408 Mason Ct, Fort Collins, CO 80524",40.5934306,-105.0780625
+s7,Example Student 07,"2145 Centre Ave, Fort Collins, CO 80526",40.5613001,-105.0856453
+s8,Example Student 08,"215 E Foothills Pkwy, Fort Collins, CO 80525",40.544534,-105.073685
 """
 
 SAMPLE_LOCATIONS_CSV = (
     "location_id,name,capacity,address,latitude,longitude\n"
-    'l1,Target Loveland,2,"1725 Rocky Mountain Ave, Loveland, CO 80538",'
-    "40.4097852,-105.0039464\n"
-    'l2,Walmart Supercenter Loveland,2,"1325 Denver Ave, Loveland, CO 80537",'
-    "40.404432,-105.0466952\n"
-    'l3,Whole Foods Market Fort Collins,2,"2201 S College Ave, Fort Collins, CO 80525",'
-    "40.5591621,-105.077211\n"
-    'l4,The Home Depot North Fort Collins,2,"1251 E Magnolia St, Fort Collins, CO 80524",'
-    "40.5832465,-105.0545061\n"
+    'l1,Cottonwood Centre,2,"815 Centre Ave, Fort Collins, CO 80526",'
+    "40.5553402,-105.0913073\n"
+    'l2,Cottonwood Lemay,2,"4824 S Lemay Ave, Fort Collins, CO 80525",'
+    "40.5192821,-105.0572307\n"
+    'l3,Cottonwood West,2,"940 Worthington Cir, Fort Collins, CO 80526",'
+    "40.5573834,-105.0941321\n"
+    'l4,Cottonwood Windsor Commons,2,"1475 Main St, Windsor, CO 80550",'
+    "40.4797646,-104.8969468\n"
+    'l5,Good Samaritan Fort Collins,2,"508 W Trilby Rd, Fort Collins, CO 80525",'
+    "40.4956128,-105.0856783\n"
+    'l6,Good Samaritan Loveland,2,"2101 S Garfield Ave, Loveland, CO 80537",'
+    "40.367572,-105.078254\n"
+    'l7,North Shore Loveland,2,"1365 W 29th St, Loveland, CO 80538",'
+    "40.4217716,-105.09613\n"
 )
 
 SAMPLE_TIMES_CSV = """student_id,location_id,driving_minutes
-s1,l1,9
-s1,l2,5
-s1,l3,21
-s1,l4,27
-s2,l1,9
-s2,l2,5
-s2,l3,21
-s2,l4,27
-s3,l1,9
-s3,l2,5
-s3,l3,22
-s3,l4,28
-s4,l1,5
-s4,l2,9
-s4,l3,24
-s4,l4,21
-s5,l1,21
-s5,l2,25
-s5,l3,5
-s5,l4,4
-s6,l1,23
-s6,l2,27
-s6,l3,7
-s6,l4,6
-s7,l1,23
-s7,l2,25
-s7,l3,3
-s7,l4,8
-s8,l1,22
-s8,l2,22
-s8,l3,4
-s8,l4,10
+s1,l1,22
+s1,l2,19
+s1,l3,23
+s1,l4,24
+s1,l5,14
+s1,l6,6
+s1,l7,7
+s2,l1,21
+s2,l2,18
+s2,l3,22
+s2,l4,24
+s2,l5,13
+s2,l6,5
+s2,l7,6
+s3,l1,23
+s3,l2,20
+s3,l3,24
+s3,l4,25
+s3,l5,15
+s3,l6,6
+s3,l7,8
+s4,l1,26
+s4,l2,19
+s4,l3,27
+s4,l4,18
+s4,l5,19
+s4,l6,15
+s4,l7,15
+s5,l1,7
+s5,l2,13
+s5,l3,8
+s5,l4,25
+s5,l5,14
+s5,l6,30
+s5,l7,23
+s6,l1,9
+s6,l2,15
+s6,l3,10
+s6,l4,27
+s6,l5,16
+s6,l6,32
+s6,l7,25
+s7,l1,2
+s7,l2,11
+s7,l3,2
+s7,l4,27
+s7,l5,11
+s7,l6,27
+s7,l7,18
+s8,l1,5
+s8,l2,8
+s8,l3,6
+s8,l4,25
+s8,l5,9
+s8,l6,24
+s8,l7,17
 """
 
 SAMPLE_PREFERENCES = (
