@@ -237,7 +237,7 @@ The sections above preserve the original audit. The subsequent user request auth
 ## Beta 5 remediation record
 
 All 17 findings have implementation and focused verification. The final independent
-review has been adjudicated below. Native release gates remain pending.
+review has been adjudicated below. Native release gates and publication are complete.
 
 | Finding | Resolution | Focused coverage |
 | --- | --- | --- |
@@ -302,3 +302,25 @@ self-tests passed. Both print layouts produced PDFs; extracted previous-result o
 contains its warning. No additional independent review round was commissioned. Native
 installer builds/smoke checks and publication are the remaining release gates; this record
 does not claim physical printing or native accessibility/installation-warning testing.
+
+### Published release verification
+
+[Beta 5](https://github.com/nklisch/student-placement-planner/releases/tag/v0.1.0b5)
+was published from `57854cb26c91728579e2f25ec5ef5bb6176beaad` after
+[the native release workflow](https://github.com/nklisch/student-placement-planner/actions/runs/33999632894)
+passed. Windows and Apple-Silicon macOS each passed **249 tests**, native bundling,
+packaged-engine checks, and their installer/application smoke checks. Windows additionally
+performed automated install/uninstall; macOS mounted and checked the disk image.
+
+Both public installers were downloaded, checked against the published SHA-256 manifest,
+and successfully verified using `gh attestation verify --repo nklisch/student-placement-planner`.
+
+| Installer | SHA-256 |
+| --- | --- |
+| Windows x64 | `a96d2c76609e925347e3306f504ccb814ef1ae70b550cf08a65536fa4184bcef` |
+| macOS Apple Silicon | `6e0ea3394b7e509a7c088cee6ce394d4e5713e01cdc062416e8567274e2a07b3` |
+
+Signing remains **self-signed preview** on Windows and **ad-hoc preview** on macOS,
+not a trusted commercial signature or Apple notarization. Automated CI does not replace
+hands-on installation-warning, assistive-technology, live-mapping, or physical-printer
+validation. Public README and website download links now target this verified release.

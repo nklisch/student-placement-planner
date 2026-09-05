@@ -239,4 +239,5 @@ Gates:
 - [x] F-01–F-17 implemented and covered by focused verification.
 - [x] Full tests, lint/format checks, and combined-rule oracle pass (249 tests; 300 oracle cases).
 - [x] Final Astra high review adjudicated; all four accepted findings repaired and verified.
-- [ ] Windows/macOS release builds and packaged smoke tests pass; beta published.
+- [x] Windows/macOS release builds and packaged smoke tests pass; beta 5 published.
+  Downloaded installers passed checksum and GitHub attestation verification.
