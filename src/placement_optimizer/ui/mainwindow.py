@@ -166,6 +166,7 @@ class MainWindow(QMainWindow):
     def __init__(self, controller: SessionController | None = None) -> None:
         super().__init__()
         self.controller = controller or SessionController()
+        self.controller.address_change_decision = self._confirm_coordinate_choice
         self._project_path: str | None = None
         self._worker: SolveWorker | None = None
         self._pending_project = None
@@ -188,6 +189,8 @@ class MainWindow(QMainWindow):
         self._build_shortcuts()
 
         self.toast = Toast(self.centralWidget())
+        self.controller.notice.connect(self.show_toast)
+        self.controller.undo.changed.connect(self.refresh_edit_actions)
         self._progress_timer = QTimer(self)
         self._progress_timer.setSingleShot(True)
         self._progress_timer.setInterval(750)
@@ -238,6 +241,7 @@ class MainWindow(QMainWindow):
         ]
         for page in self.pages:
             self.stack.addWidget(page)
+        self.pages[3].addressRepairRequested.connect(self._repair_travel_address)
         body.addWidget(self.stack, stretch=1)
         outer.addLayout(body, stretch=1)
 
@@ -406,6 +410,18 @@ class MainWindow(QMainWindow):
     def current_page(self) -> QWidget:
         return self.pages[self.stack.currentIndex()]
 
+    def _repair_travel_address(self, kind: str, item_id: str) -> None:
+        step = 0 if kind == "Student" else 1
+        page = self.pages[step]
+        for row in page.model._rows():
+            if row.id.strip() == item_id:
+                self.navigate(step)
+                index = page.model.issue_index(row.key, "address")
+                page.table.setCurrentIndex(index)
+                page.table.scrollTo(index)
+                page.table.setFocus(Qt.FocusReason.OtherFocusReason)
+                return
+
     # --- chrome refresh --------------------------------------------------------
 
     def refresh_chrome(self) -> None:
@@ -456,7 +472,7 @@ class MainWindow(QMainWindow):
         results_page = self.pages[4]
         if results_page.outcome is None:
             self.steps_model.set_status(4, "○")
-        elif session.results_are_stale:
+        elif session.results_are_stale or not results_page.has_usable_result():
             self.steps_model.set_status(4, "!", attention=True)
         else:
             self.steps_model.set_status(4, "✓")
@@ -529,11 +545,8 @@ class MainWindow(QMainWindow):
         self.add_row_action.setEnabled(hasattr(page, "add_row"))
         self.delete_rows_action.setEnabled(hasattr(page, "delete_selected_rows"))
 
-    def _page_undo_stack(self, page):
-        if hasattr(page, "undo"):
-            return page.undo
-        model = getattr(page, "model", None)
-        return getattr(model, "undo", None)
+    def _page_undo_stack(self, _page):
+        return self.controller.undo
 
     # --- edit menu routing ------------------------------------------------------
 
@@ -644,7 +657,7 @@ class MainWindow(QMainWindow):
         if self._pending_session is not session or self._pending_project is None:
             return
 
-        self._last_detail = outcome.message
+        self._last_detail = f"Placement calculation: {outcome.kind.value}."
         results_page = self.pages[4]
         if outcome.kind is OutcomeKind.CANCELLED:
             if results_page.outcome is None:
@@ -786,13 +799,20 @@ class MainWindow(QMainWindow):
         results_page = self.pages[4]
         if not results_page.has_usable_result():
             return
-        path = self.ask_save_csv(self, "Export results", "placements.csv")
+        # Modal dialogs process worker completions; retain the selected immutable pair.
+        outcome, project = results_page.outcome, results_page.project
+        previous = self.controller.session.results_are_stale
+        if previous and not self._confirm_previous_result("Export"):
+            return
+        path = self.ask_save_csv(
+            self, "Export results", "previous-placements.csv" if previous else "placements.csv"
+        )
         if not path:
             return
         text = export_result_csv(
-            results_page.outcome.result,
-            results_page.project.students,
-            results_page.project.locations,
+            outcome.result,
+            project.students,
+            project.locations,
         )
         try:
             Path(path).write_text(text, encoding="utf-8")
@@ -807,7 +827,47 @@ class MainWindow(QMainWindow):
             return
         from placement_optimizer.ui.printing import ResultsPrintPreviewDialog
 
-        ResultsPrintPreviewDialog(results_page.outcome, results_page.project, self).exec()
+        # Modal dialogs process worker completions; retain the selected immutable pair.
+        outcome, project = results_page.outcome, results_page.project
+        previous = self.controller.session.results_are_stale
+        if previous and not self._confirm_previous_result("Print"):
+            return
+        ResultsPrintPreviewDialog(outcome, project, self, previous_result=previous).exec()
+
+    def _confirm_previous_result(self, action: str) -> bool:
+        box = QMessageBox(self)
+        box.setWindowTitle("These placements are out of date")
+        box.setText("Your students, locations, rules, or travel times have changed.")
+        box.setInformativeText(
+            "Update the placements first, or deliberately share the previous result."
+        )
+        update = box.addButton("Update placements", QMessageBox.ButtonRole.AcceptRole)
+        previous = box.addButton(f"{action} previous placements", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(update)
+        box.exec()
+        if box.clickedButton() is update:
+            self.find_placements()
+        return box.clickedButton() is previous
+
+    def _confirm_coordinate_choice(self, name: str) -> str:
+        box = QMessageBox(self)
+        box.setWindowTitle("Use the new address or keep coordinates?")
+        box.setText(f"{name} already has coordinates, which take priority over an address.")
+        box.setInformativeText(
+            "Use the new address to clear the old coordinates, or keep the coordinates "
+            "as an explicit override."
+        )
+        address = box.addButton("Use new address", QMessageBox.ButtonRole.AcceptRole)
+        coordinates = box.addButton("Keep coordinates", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(address)
+        box.exec()
+        if box.clickedButton() is address:
+            return "address"
+        if box.clickedButton() is coordinates:
+            return "coordinates"
+        return "cancel"
 
     # --- sample data -------------------------------------------------------------
 
@@ -845,6 +905,8 @@ class MainWindow(QMainWindow):
             TravelMode.MANUAL: "Enter times myself",
             TravelMode.OFFLINE: "Offline map pack",
             TravelMode.GOOGLE: "Online maps (Google)",
+            TravelMode.COMMUNITY: "Community OpenStreetMap services",
+            TravelMode.OPENROUTESERVICE: "openrouteservice",
         }
         travel_page = self.pages[3]
         dialog = TroubleshootingDialog(
@@ -897,10 +959,17 @@ class MainWindow(QMainWindow):
         box = QMessageBox(self)
         box.setWindowTitle("Import finished")
         box.setText(
-            f"Imported {accepted} rows. {kept} rows need attention—they're already "
-            "in the table, marked for repair."
+            f"Imported {accepted} usable rows. {kept} rows need repair in the table."
+            if kept
+            else f"Imported {accepted} rows. Review the import notes before using this data."
         )
-        fix_button = box.addButton("Fix them in the table", QMessageBox.ButtonRole.AcceptRole)
+        box.setInformativeText(
+            "Marked cells explain row problems. Any additional import notes appear above the table."
+        )
+        fix_button = box.addButton(
+            "Fix them in the table" if kept else "Review import notes",
+            QMessageBox.ButtonRole.AcceptRole,
+        )
         box.addButton("Discard import", QMessageBox.ButtonRole.DestructiveRole)
         keep_button = box.addButton("Keep as they are", QMessageBox.ButtonRole.RejectRole)
         box.setDefaultButton(fix_button)

@@ -173,6 +173,48 @@ def test_close_waits_for_active_import_worker(window, qtbot, tmp_path, monkeypat
     assert window.controller.session.students == []
 
 
+def test_display_headers_and_generated_import_ids(window) -> None:
+    from placement_optimizer.projects import parse_locations_csv, parse_students_csv
+
+    students = window.pages[0]
+    students.model.paste_block(0, 0, "Existing\tS001")
+    students._import_session = window.controller.session
+    students._apply_import(parse_students_csv("Name,ID\nAlice,\nBob,S002\nCara,\n"))
+    rows = window.controller.session.students
+    assert [row.id for row in rows] == ["S001", "S003", "S002", "S004"]
+    assert len({row.key for row in rows}) == 4
+    assert all(row.key for row in rows)
+    assert window.controller.session.readiness().students_ready
+
+    locations = window.pages[1]
+    locations._import_session = window.controller.session
+    locations._apply_import(
+        parse_locations_csv(
+            'Name,ID,Capacity,Minimum,Address,Coordinates\nLibrary,,3,1,Main Street,"51.5, -0.12"\n'
+        )
+    )
+    location = window.controller.session.locations[0]
+    assert location.id == "L001"
+    assert location.minimum_capacity == "1"
+    assert location.coordinates == "51.5, -0.12"
+
+
+def test_unknown_import_values_have_persistent_warning(window) -> None:
+    from placement_optimizer.projects import parse_students_csv
+
+    page = window.pages[0]
+    page._import_session = window.controller.session
+    reports = []
+    window.report_import = lambda **kwargs: reports.append(kwargs)
+    batch = parse_students_csv("Name,Special requirement\nAlice,Keep together\n")
+    page._apply_import(batch)
+    retained = page._retained_imports[0].draft_rows[0].as_dict()
+    assert retained["special_requirement"] == "Keep together"
+    assert not page.import_warning.isHidden()
+    assert reports[0]["accepted"] == 1
+    assert reports[0]["kept"] == 0
+
+
 def test_unsaved_close_guard(window, fill_small, monkeypatch) -> None:
     assert window.maybe_close()  # unmodified: closes freely
 

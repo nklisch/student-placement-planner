@@ -4,8 +4,7 @@ Validation state lives in the models (issue maps cached per session version);
 views and delegates only render it. All three editable grids — students,
 locations, and manual driving times — share the same interaction contract:
 a live new-row position on roster tables, raw-text retention for invalid
-input, TSV paste blocks as single undo operations, and snapshot undo scoped
-to the grid.
+input, TSV paste blocks as single undo operations, and a shared chronological data-edit history.
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ from PySide6.QtGui import QColor, QGuiApplication
 from PySide6.QtWidgets import QApplication
 
 from placement_optimizer.application import DraftArea, DraftGridSnapshot, DraftSession
-from placement_optimizer.ui.controller import SessionController, SnapshotUndo
+from placement_optimizer.ui.controller import SessionController
 from placement_optimizer.ui.help_content import LOCATION_FIELD_HELP, STUDENT_FIELD_HELP
 from placement_optimizer.ui.theme import LIGHT, tokens_for
 
@@ -77,11 +76,8 @@ class RosterTableModel(QAbstractTableModel):
     def __init__(self, controller: SessionController, parent: QObject | None = None):
         super().__init__(parent)
         self._controller = controller
-        self.undo = SnapshotUndo(
-            lambda: capture_grid_state(self._session),
-            self._restore,
-            self,
-        )
+        self.undo = controller.undo
+        controller.data_restored.connect(self.refresh)
         self._issue_version = -1
         self._issue_cache: dict[str, dict[str, str]] = {}
         self._edited_id_keys: set[str] = set()
@@ -98,7 +94,9 @@ class RosterTableModel(QAbstractTableModel):
     def _add_draft(self):
         raise NotImplementedError
 
-    def _update_row(self, index: int, field: str, value: str) -> None:
+    def _update_row(
+        self, index: int, field: str, value: str, *, keep_coordinates: bool = False
+    ) -> None:
         raise NotImplementedError
 
     def _remove_rows(self, indexes: list[int]) -> None:
@@ -197,11 +195,17 @@ class RosterTableModel(QAbstractTableModel):
         draft = self._rows()[row]
         if getattr(draft, field) == text:
             return
+        keep_coordinates = False
+        if record and field == "address" and draft.coordinates.strip():
+            decision = self._controller.address_change_decision(draft.name or draft.id)
+            if decision == "cancel":
+                return
+            keep_coordinates = decision == "coordinates"
         if record:
             self.undo.record(tag=("cell", draft.key, field))
         if field == "id":
             self._edited_id_keys.add(draft.key)
-        self._update_row(row, field, text)
+        self._update_row(row, field, text, keep_coordinates=keep_coordinates)
         changed = self.index(row, self.FIELDS.index(field))
         self.dataChanged.emit(changed, changed)
         self._controller.notify()
@@ -295,8 +299,10 @@ class StudentsTableModel(RosterTableModel):
     def _add_draft(self):
         return self._session.add_student()
 
-    def _update_row(self, index: int, field: str, value: str) -> None:
-        self._session.update_student(index, **{field: value})
+    def _update_row(
+        self, index: int, field: str, value: str, *, keep_coordinates: bool = False
+    ) -> None:
+        self._session.update_student(index, keep_coordinates=keep_coordinates, **{field: value})
 
     def _remove_rows(self, indexes: list[int]) -> None:
         self._session.remove_students(indexes)
@@ -315,8 +321,10 @@ class LocationsTableModel(RosterTableModel):
     def _add_draft(self):
         return self._session.add_location()
 
-    def _update_row(self, index: int, field: str, value: str) -> None:
-        self._session.update_location(index, **{field: value})
+    def _update_row(
+        self, index: int, field: str, value: str, *, keep_coordinates: bool = False
+    ) -> None:
+        self._session.update_location(index, keep_coordinates=keep_coordinates, **{field: value})
 
     def _remove_rows(self, indexes: list[int]) -> None:
         self._session.remove_locations(indexes)
@@ -332,11 +340,8 @@ class ManualTimesModel(QAbstractTableModel):
     def __init__(self, controller: SessionController, parent: QObject | None = None):
         super().__init__(parent)
         self._controller = controller
-        self.undo = SnapshotUndo(
-            lambda: capture_grid_state(self._session),
-            self._restore,
-            self,
-        )
+        self.undo = controller.undo
+        controller.data_restored.connect(self.refresh)
         self._issue_version = -1
         self._issue_cache: dict[str, str] = {}
 
@@ -440,22 +445,24 @@ class ManualTimesModel(QAbstractTableModel):
         if not grid:
             return
         self.undo.record()
-        last_column = self.columnCount() - 1
+        skipped = 0
         for row_offset, values in enumerate(grid):
             target_row = start_row + row_offset
             if target_row >= self.rowCount():
-                break  # the grid size follows the rosters; extra rows do not land
-            room = last_column - start_column + 1
-            fitting, overflow = values[:room], values[room:]
-            for column_offset, value in enumerate(fitting):
-                self._set_cell(target_row, start_column + column_offset, value)
-            if overflow:
-                current = self._session.manual_times.get(
-                    self._pair_key(target_row, last_column), ""
-                )
-                merged = f"{current}, {', '.join(overflow)}" if current else ", ".join(overflow)
-                self._set_cell(target_row, last_column, merged)
+                skipped += len(values)
+                continue
+            for column_offset, value in enumerate(values):
+                target_column = start_column + column_offset
+                if target_column >= self.columnCount():
+                    skipped += 1
+                    continue
+                self._set_cell(target_row, target_column, value)
         self._controller.notify()
+        if skipped:
+            self._controller.notice.emit(
+                f"Pasted the cells that fit; {skipped} extra cells were outside the grid "
+                "and were not pasted."
+            )
 
     def _set_cell(self, row: int, column: int, value: str) -> None:
         key = self._pair_key(row, column)

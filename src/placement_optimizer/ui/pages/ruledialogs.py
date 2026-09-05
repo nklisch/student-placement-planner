@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QStyledItemDelegate,
@@ -51,8 +52,8 @@ class _ComboDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
         combo = QComboBox(parent)
         combo.addItem(self._blank, "")
-        for display, data in self._options:
-            combo.addItem(display, data)
+        for data, display in self._options:
+            combo.addItem(display or data, data)
         return combo
 
     def setEditorData(self, editor, index) -> None:
@@ -360,7 +361,11 @@ class _StudentLimitsModel(QAbstractTableModel):
         self.dataChanged.emit(index, index)
         return True
 
-    def add_row(self, student_id: str) -> None:
+    def add_row(self, student_id: str = "") -> None:
+        used = {row[0] for row in self._rows}
+        student_id = next((sid for sid, _ in self._students if sid not in used), "")
+        if not student_id:
+            return
         self.beginInsertRows(QModelIndex(), len(self._rows), len(self._rows))
         self._rows.append([student_id, 30])
         self.endInsertRows()
@@ -371,7 +376,13 @@ class _StudentLimitsModel(QAbstractTableModel):
             del self._rows[row]
             self.endRemoveRows()
 
+    def has_duplicates(self) -> bool:
+        ids = [row[0] for row in self._rows if row[0]]
+        return len(ids) != len(set(ids))
+
     def limits(self) -> tuple[tuple[str, int], ...]:
+        if self.has_duplicates():
+            raise ValueError("Each student can have only one driving limit.")
         seen: set[str] = set()
         result = []
         for student_id, minutes in self._rows:
@@ -399,10 +410,10 @@ class CommuteLimitDialog(QDialog):
 
         self.global_check = QCheckBox("Limit everyone's driving time")
         self.global_check.setToolTip(
-            "Prevent any placement whose driving time is above this limit."
+            "Prevent drives above this limit, except where a student's own limit overrides it."
         )
         self.global_spin = QSpinBox()
-        self.global_spin.setToolTip("The longest drive allowed for every student.")
+        self.global_spin.setToolTip("The general limit; individual student limits override it.")
         self.global_spin.setRange(1, 999)
         self.global_spin.setSuffix(" minutes")
         global_row = QHBoxLayout()
@@ -428,6 +439,9 @@ class CommuteLimitDialog(QDialog):
         self.detail = QWidget()
         detail_layout = QVBoxLayout(self.detail)
         detail_layout.setContentsMargins(0, 4, 0, 0)
+        hint = QLabel("A student's own limit overrides the general limit, even if it is longer.")
+        hint.setWordWrap(True)
+        detail_layout.addWidget(hint)
         self._limits_model = _StudentLimitsModel(students, student_limits)
         table = QTableView()
         table.setModel(self._limits_model)
@@ -439,7 +453,14 @@ class CommuteLimitDialog(QDialog):
         detail_layout.addWidget(table)
         buttons_row = QHBoxLayout()
         add_button = QPushButton("Add a student limit")
-        add_button.clicked.connect(lambda: self._limits_model.add_row(students[0][0]))
+        add_button.clicked.connect(lambda: self._limits_model.add_row())
+        self._limits_model.rowsInserted.connect(
+            lambda: add_button.setEnabled(self._limits_model.rowCount() < len(students))
+        )
+        self._limits_model.rowsRemoved.connect(
+            lambda: add_button.setEnabled(self._limits_model.rowCount() < len(students))
+        )
+        add_button.setEnabled(self._limits_model.rowCount() < len(students))
         remove_button = QPushButton("Remove selected")
         remove_button.clicked.connect(
             lambda: self._limits_model.remove_row(table.currentIndex().row())
@@ -459,13 +480,26 @@ class CommuteLimitDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+    def accept(self) -> None:
+        if self._limits_model.has_duplicates():
+            self.toggle.setChecked(True)
+            QMessageBox.warning(
+                self,
+                "Duplicate student limits",
+                "Each student can have only one driving limit. Remove the duplicate row "
+                "or choose a different student before continuing.",
+            )
+            return
+        super().accept()
+
     def _toggle_detail(self, checked: bool) -> None:
         self.detail.setVisible(checked)
         self.toggle.setArrowType(Qt.ArrowType.DownArrow if checked else Qt.ArrowType.RightArrow)
 
     def result_limits(self) -> tuple[int | None, tuple[tuple[str, int], ...]]:
         maximum = self.global_spin.value() * 60 if self.global_check.isChecked() else None
-        student_limits = self._limits_model.limits() if self.toggle.isChecked() else ()
+        # Expansion is presentation only; remove rows explicitly to delete limits.
+        student_limits = self._limits_model.limits()
         return maximum, student_limits
 
 
@@ -506,6 +540,9 @@ class AllowedLocationsDialog(QDialog):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
+        self.empty_warning = QLabel("No locations allowed — this student cannot be placed.")
+        self.empty_warning.setWordWrap(True)
+        layout.addWidget(self.empty_warning)
         self._checks: list[QCheckBox] = []
         checks_box = QVBoxLayout()
         for location_id, name in locations:
@@ -537,16 +574,34 @@ class AllowedLocationsDialog(QDialog):
             checked = allowed is None or check.property("location_id") in allowed
             check.setChecked(checked)
         self._loading = False
+        self.empty_warning.setVisible(not any(check.isChecked() for check in self._checks))
 
     def _save_current(self) -> None:
         if self._loading:
             return
         checked = {check.property("location_id") for check in self._checks if check.isChecked()}
         student_id = self._current_student()
+        self.empty_warning.setVisible(not checked)
         if len(checked) == len(self._checks):
             self._allowed.pop(student_id, None)
         else:
             self._allowed[student_id] = checked
+
+    def accept(self) -> None:
+        self._save_current()
+        if any(not allowed for allowed in self._allowed.values()):
+            answer = QMessageBox.question(
+                self,
+                "Keep no allowed locations?",
+                "At least one student has no allowed locations and cannot be placed. "
+                "Keep this restriction? Allow unplaced students in More options to use "
+                "this intentionally.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+        super().accept()
 
     def eligible(self) -> tuple[Preference, ...]:
         self._save_current()

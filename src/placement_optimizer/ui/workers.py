@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from pathlib import Path
 from threading import Event, Lock
 
 from PySide6.QtCore import QObject, QThread, Signal
 
-from placement_optimizer.application import PlacementProject, SolveProjectOutcome, solve_project
+from placement_optimizer.application import (
+    OutcomeKind,
+    PlacementProject,
+    SolveProjectOutcome,
+    solve_project,
+)
 from placement_optimizer.optimization import OptimizationCancellation
 from placement_optimizer.travel import (
     MapPackDownloadCancelled,
@@ -51,10 +57,18 @@ class AsyncOperationWorker(QThread):
             loop = self._loop
             task = self._task
         if loop is not None and task is not None:
-            loop.call_soon_threadsafe(task.cancel)
+            # Completion can close the loop between taking the lock and
+            # scheduling cancellation. The requested flag still wins.
+            with suppress(RuntimeError):
+                loop.call_soon_threadsafe(task.cancel)
 
     def run(self) -> None:
-        asyncio.run(self._execute())
+        try:
+            asyncio.run(self._execute())
+        except Exception:
+            # Also cover task-factory/event-loop setup failures. Never expose
+            # arbitrary exception text, which can contain provider credentials.
+            self.failed.emit("That operation couldn't be completed. Try again or use another mode.")
 
     async def _execute(self) -> None:
         loop = asyncio.get_running_loop()
@@ -68,7 +82,7 @@ class AsyncOperationWorker(QThread):
             result = await task
         except (asyncio.CancelledError, MapPackDownloadCancelled):
             self.cancelled_operation.emit()
-        except (MapPackError, TravelDataError, ValueError) as error:
+        except (MapPackError, TravelDataError) as error:
             self.failed.emit(str(error))
         except Exception:
             self.failed.emit("That operation couldn't be completed. Try again or use another mode.")
@@ -109,7 +123,7 @@ class CsvImportWorker(QThread):
             if self._cancelled:
                 return
             batch = self._parser(text)
-        except (OSError, UnicodeError):
+        except Exception:
             if not self._cancelled:
                 self.failed.emit()
             return
@@ -133,5 +147,15 @@ class SolveWorker(QThread):
         return self._cancellation.is_cancelled
 
     def run(self) -> None:
-        outcome: SolveProjectOutcome = solve_project(self._project, self._cancellation)
+        try:
+            outcome: SolveProjectOutcome = solve_project(self._project, self._cancellation)
+        except Exception:
+            # Native engine/loading failures must restore the UI, not leave a
+            # calculation running forever. Raw exceptions may contain inputs.
+            outcome = SolveProjectOutcome(
+                OutcomeKind.CANCELLED if self.is_cancelled else OutcomeKind.UNAVAILABLE,
+                "Calculation cancelled. Your inputs were kept."
+                if self.is_cancelled
+                else "Placements couldn't be calculated. Your inputs were kept; try again.",
+            )
         self.finished_outcome.emit(outcome)

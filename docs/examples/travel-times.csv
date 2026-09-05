@@ -1,0 +1,5 @@
+student_id,location_id,driving_minutes,distance_km
+S001,L001,12,
+S001,L002,25,
+S002,L001,22,
+S002,L002,10,

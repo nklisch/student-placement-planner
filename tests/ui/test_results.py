@@ -264,3 +264,34 @@ def test_cancelled_outcome_keeps_previous_results(ready_window) -> None:
     results = window.pages[4]
     assert results.banner.title.text() == "Cancelled."
     assert not results.export_button.isEnabled()
+
+
+def test_failure_result_objects_hide_assignment_content(ready_window):
+    project = ready_window.controller.session.build_project().project
+    page = ready_window.pages[4]
+    for kind in (OutcomeKind.INFEASIBLE, OutcomeKind.NOT_SOLVED, OutcomeKind.CANCELLED):
+        _show(ready_window, SolveProjectOutcome(kind, "Try again", _result(placements=())), project)
+        assert not page.has_usable_result()
+        assert not page.export_button.isEnabled()
+        assert not page.print_button.isEnabled()
+        assert page.stat_longest.isHidden()
+        assert page.stat_average.isHidden()
+        assert page.stat_total.isHidden()
+        assert page.stat_choices.isHidden()
+        assert page.tables.isHidden()
+        assert page.capacity_scroll.isHidden()
+    _show(ready_window, SolveProjectOutcome(OutcomeKind.SUCCESS, "", _result()), project)
+    assert not page.stat_longest.isHidden()
+    assert page.has_usable_result()
+
+
+def test_previous_result_warning_survives_print_options(ready_window, qtbot):
+    project = ready_window.controller.session.build_project().project
+    outcome = SolveProjectOutcome(OutcomeKind.SUCCESS, "", _result())
+    assert "predate" not in build_results_print_html(outcome, project, PrintOptions())
+    dialog = ResultsPrintPreviewDialog(outcome, project, previous_result=True)
+    qtbot.addWidget(dialog)
+    for layout in (0, 1):
+        dialog.layout_combo.setCurrentIndex(layout)
+        dialog.include_driving.setChecked(False)
+        assert "predate your latest changes" in dialog._document().toPlainText()

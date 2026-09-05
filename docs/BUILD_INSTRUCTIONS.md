@@ -72,31 +72,18 @@ The performance-critical work occurs in native OR-Tools, Qt, SQLite, and Valhall
 
 ## Model responsibilities and review cadence
 
-Subagents remain depth one and are used only at a few large seams. Do not generate constant review churn.
+For the audit-remediation release, the user approved Astra low for bounded
+implementation and one Astra high review at the end. This supersedes the original
+build's model-role assignments for the current program.
 
-### Parent agent
-
-The parent agent performs all backend and complex implementation inline in this repository: domain modeling, optimization, provider logic, offline map integration, storage/import/export, packaging, error recovery, integration, and tests.
-
-### UI-only agents
-
-These model restrictions are explicit:
-
-- **Kimi K3 (`kimi-coding/k3`)**: UI mockups, interaction design, and implementation of the approved PySide6 UI using parent-authored application interfaces. It must not design or change backend/solver behavior.
-- **GLM 5.3 (`zai/glm-5.3`)**: review UI designs only for taste, human ease of use, practicality, and cleanliness.
-- **Terra (`openai-codex/gpt-5.6-terra`)**: review UI implementation only.
-- **Luna (`openai-codex/gpt-5.6-luna`)**: not used for this build unless the user changes the role assignment again.
-
-Do not use K3 or GLM 5.3 for backend, architecture, optimization, provider, or security work. K3 may add UI-focused tests as part of UI implementation. Do not use Terra outside UI review.
-
-### Broad implementation reviews
-
-Use **Sol xhigh (`openai-codex/gpt-5.6-sol`)** sparingly at major implementation seams:
-
-1. After the backend vertical slice is complete and tested: manual input/matrix through advanced solve and result export.
-2. At release-candidate integration: desktop UI, online/offline providers, recovery behavior, packaging, and complete tests.
-
-A third Sol review is warranted only after a genuinely large architectural change. Reviews are read-only and focus on correctness, maintainability, integration risks, and accidental overengineering. The parent agent applies fixes inline.
+- The parent owns integration, architecture decisions, adjudication, verification,
+  and release. Independent implementation units may be delegated to Astra low.
+- Agents own non-overlapping files/interfaces and return tests and caveats; their
+  completion claims are not acceptance.
+- Run a single coherent Astra high review after integration and tests. The parent
+  adjudicates its findings and applies any required fixes before publishing.
+- Do not introduce repeated cross-model review rounds or use restricted models
+  without fresh authorization.
 
 ## Working rules
 

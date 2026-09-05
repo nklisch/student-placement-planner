@@ -489,9 +489,7 @@ class MapPackDialog(QDialog):
         self.refresh_button.setEnabled(idle)
         self.download_button.setEnabled(idle and bool(self._catalog.packs))
         self.refresh_regions_button.setEnabled(idle)
-        self.prepare_region_button.setEnabled(
-            idle and self._selected_source_region() is not None
-        )
+        self.prepare_region_button.setEnabled(idle and self._selected_source_region() is not None)
 
     def closeEvent(self, event) -> None:
         if self._worker is not None:

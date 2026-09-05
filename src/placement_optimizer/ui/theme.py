@@ -18,6 +18,8 @@ LIGHT = {
     "text": "#23251F",
     "secondary": "#6E6B64",
     "accent": "#2F6F5E",
+    "accent_text": "#FFFFFF",
+    "disabled_text": "#23251F",
     "accent_pressed": "#276050",
     "accent_soft": "#DCE9E4",
     "success": "#2F8F4E",
@@ -40,6 +42,8 @@ DARK = {
     "text": "#E9E7E1",
     "secondary": "#A8A49B",
     "accent": "#5E9C89",
+    "accent_text": "#0B1510",
+    "disabled_text": "#FFFFFF",
     "accent_pressed": "#4E8A77",
     "accent_soft": "#31463D",
     "success": "#62AC77",
@@ -91,7 +95,7 @@ def _palette(tokens: dict[str, str]) -> QPalette:
     palette.setColor(QPalette.ColorRole.Button, surface)
     palette.setColor(QPalette.ColorRole.ButtonText, text)
     palette.setColor(QPalette.ColorRole.Highlight, accent)
-    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#FFFFFF"))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor(tokens["accent_text"]))
     palette.setColor(QPalette.ColorRole.ToolTipBase, surface)
     palette.setColor(QPalette.ColorRole.ToolTipText, text)
     palette.setColor(QPalette.ColorRole.PlaceholderText, secondary)
@@ -169,14 +173,17 @@ QPushButton:focus {{ border: 2px solid {t["accent"]}; }}
 QPushButton:disabled {{ color: {t["disabled"]}; background: {t["window"]}; }}
 QPushButton[kind="primary"] {{
     background: {t["accent"]};
-    color: #FFFFFF;
+    color: {t["accent_text"]};
     border: none;
     font-weight: 600;
 }}
 QPushButton[kind="primary"]:hover {{ background: {t["accent_pressed"]}; }}
 QPushButton[kind="primary"]:pressed {{ background: {t["accent_pressed"]}; }}
 QPushButton[kind="primary"]:focus {{ border: 2px solid {t["accent_soft"]}; }}
-QPushButton[kind="primary"]:disabled {{ background: {t["disabled"]}; }}
+QPushButton[kind="primary"]:checked {{ background: {t["accent_pressed"]}; }}
+QPushButton[kind="primary"]:disabled {{
+    background: {t["disabled"]}; color: {t["disabled_text"]};
+}}
 QPushButton[kind="quiet"] {{
     background: transparent;
     border: none;
@@ -200,6 +207,7 @@ QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {{
     border-radius: 6px;
     padding: 4px 8px;
     selection-background-color: {t["accent_soft"]};
+    selection-color: {t["text"]};
 }}
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus {{
     border: 2px solid {t["accent"]};

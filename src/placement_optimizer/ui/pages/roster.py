@@ -39,6 +39,22 @@ if TYPE_CHECKING:
     from placement_optimizer.ui.mainwindow import MainWindow
 
 
+def _import_coordinates(values: dict[str, str]) -> str:
+    """Join split columns without losing a missing half or conflicting input."""
+    combined = values.get("coordinates", "")
+    latitude = values.get("latitude", "") or values.get("lat", "")
+    longitude = values.get("longitude", "") or values.get("lon", "") or values.get("lng", "")
+    split = f"{latitude}, {longitude}" if latitude or longitude else ""
+    if combined and split:
+        from placement_optimizer.projects.csv_io import _coordinate
+
+        try:
+            _coordinate(values)
+        except ValueError:
+            return f"{combined}; separate: {split}"
+    return combined or split
+
+
 class IssueStrip(QFrame):
     """A slim strip of clickable issues that jump to their cells."""
 
@@ -85,6 +101,7 @@ class RosterPage(QWidget):
         self._host = host
         self._import_worker: CsvImportWorker | None = None
         self._import_session = None
+        self._retained_imports: list[ImportBatch] = []
         self.model: RosterTableModel = self._make_model(controller)
 
         layout = QVBoxLayout(self)
@@ -132,6 +149,12 @@ class RosterPage(QWidget):
         layout.addWidget(self.issue_strip)
         self.note_strip = InfoStrip()
         layout.addWidget(self.note_strip)
+        self.import_warning = InfoStrip()
+        layout.addWidget(self.import_warning)
+        self.import_details_button = QPushButton("Last import details…")
+        self.import_details_button.clicked.connect(self.show_import_details)
+        self.import_details_button.hide()
+        layout.addWidget(self.import_details_button, alignment=Qt.AlignmentFlag.AlignLeft)
 
         self.table = PasteTableView()
         self.table.setModel(self.model)
@@ -195,7 +218,7 @@ class RosterPage(QWidget):
         message = f"Removed {count} {self._count_word(count)}."
         if rules_cleaned:
             message += " Related rules were updated."
-        self._host.show_toast(message, "Undo", self.model.undo.undo)
+        self._host.show_toast(message, "Undo", self.model.undo.bound_undo())
         self._update_remove_button()
 
     def _update_remove_button(self) -> None:
@@ -224,7 +247,11 @@ class RosterPage(QWidget):
         self._import_worker.start()
 
     def _apply_import(self, batch: ImportBatch) -> None:
-        if self._import_session is not self._controller.session:
+        import_session = self._import_session
+        self._controller.apply_import(lambda: self._apply_import_now(batch, import_session))
+
+    def _apply_import_now(self, batch, import_session) -> None:
+        if import_session is not self._controller.session:
             return
         if not batch.draft_rows:
             message = batch.issues[0].message if batch.issues else "No rows were found."
@@ -232,22 +259,82 @@ class RosterPage(QWidget):
             return
 
         self.model.undo.record()
+        self._retained_imports.clear()
+        self.import_warning.show_text("")
+        self.import_details_button.hide()
         added = 0
+        prefix = "S" if self.model.AREA is DraftArea.STUDENTS else "L"
+        kind = "student" if prefix == "S" else "location"
+        reserved = {row.id.strip() for row in self.model._rows()}
+        reserved.update(
+            row.as_dict().get(f"{kind}_id", "") or row.as_dict().get("id", "")
+            for row in batch.draft_rows
+        )
+        imported_keys = set()
         for draft_row in batch.draft_rows:
-            self._add_import_row(draft_row.as_dict())
+            values = draft_row.as_dict()
+            if not (values.get(f"{kind}_id") or values.get("id")):
+                number = 1
+                while f"{prefix}{number:03d}" in reserved:
+                    number += 1
+                values["id"] = f"{prefix}{number:03d}"
+                reserved.add(values["id"])
+            self._add_import_row(values)
+            imported_keys.add(self.model._rows()[-1].key)
             added += 1
         self.model.refresh()
         self._controller.notify()
 
-        if batch.error_count:
+        invalid_keys = {
+            issue.row_key
+            for issue in self._controller.session.readiness().issues
+            if issue.area is self.model.AREA and issue.row_key in imported_keys
+        }
+        if batch.issues:
+            # Keep unsupported input available locally rather than silently dropping it.
+            self._retained_imports.append(batch)
+            self.import_warning.show_text(
+                f"Last import: {len(batch.issues)} notes. Some fields were not imported "
+                "or need repair; review the details before using this data."
+            )
+            self.import_details_button.show()
+        if invalid_keys or batch.issues:
             self._host.report_import(
-                accepted=added - batch.error_count,
-                kept=batch.error_count,
+                accepted=added - len(invalid_keys),
+                kept=len(invalid_keys),
                 on_fix=self.reveal_first_issue,
-                on_discard=self.model.undo.undo,
+                on_discard=self._discard_import,
             )
         else:
             self._host.show_toast(f"Imported {added} {self._count_word(added)}.")
+
+    def _discard_import(self) -> None:
+        self.model.undo.undo()
+        self._retained_imports.clear()
+        self.import_warning.show_text("")
+        self.import_details_button.hide()
+
+    def show_import_details(self) -> None:
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QPlainTextEdit
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Last import details")
+        dialog.resize(640, 400)
+        layout = QVBoxLayout(dialog)
+        details = QPlainTextEdit()
+        details.setReadOnly(True)
+        details.setPlainText(
+            "\n".join(
+                f"CSV row {issue.row}: {issue.message}"
+                for batch in self._retained_imports
+                for issue in batch.issues
+            )
+        )
+        layout.addWidget(details)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.exec()
 
     def _import_failed(self) -> None:
         self._host.show_toast("That file couldn't be read. Check it and try again.")
@@ -345,6 +432,9 @@ class RosterPage(QWidget):
         self.cancel_import()
         self._import_session = None
         self.model.hard_reset()
+        self._retained_imports.clear()
+        self.import_warning.show_text("")
+        self.import_details_button.hide()
         self.refresh_page()
 
 
@@ -373,19 +463,15 @@ class StudentsPage(RosterPage):
         return parse_students_csv(text)
 
     def _add_import_row(self, values: dict[str, str]) -> None:
-        from placement_optimizer.application import StudentDraft
-
-        latitude = values.get("latitude", "") or values.get("lat", "")
-        longitude = values.get("longitude", "") or values.get("lon", "") or values.get("lng", "")
-        coordinates = ", ".join(part for part in (latitude, longitude) if part)
-        self._controller.session.add_student(
-            StudentDraft(
-                key="",
-                id=values.get("student_id", "") or values.get("id", ""),
-                name=values.get("student_name", "") or values.get("name", ""),
-                address=values.get("address", ""),
-                coordinates=coordinates,
-            )
+        session = self._controller.session
+        row = session.add_student()
+        identifier = values.get("student_id", "") or values.get("id", "") or row.id
+        session.update_student(
+            len(session.students) - 1,
+            id=identifier,
+            name=values.get("student_name", "") or values.get("name", "") or identifier,
+            address=values.get("address", ""),
+            coordinates=_import_coordinates(values),
         )
 
     def _note_text(self) -> str:
@@ -424,22 +510,19 @@ class LocationsPage(RosterPage):
         return parse_locations_csv(text)
 
     def _add_import_row(self, values: dict[str, str]) -> None:
-        from placement_optimizer.application import LocationDraft
-
-        latitude = values.get("latitude", "") or values.get("lat", "")
-        longitude = values.get("longitude", "") or values.get("lon", "") or values.get("lng", "")
-        coordinates = ", ".join(part for part in (latitude, longitude) if part)
-        self._controller.session.add_location(
-            LocationDraft(
-                key="",
-                id=values.get("location_id", "") or values.get("id", ""),
-                name=values.get("location_name", "") or values.get("name", ""),
-                capacity=values.get("capacity", ""),
-                minimum_capacity=values.get("minimum_capacity", "")
-                or values.get("min_capacity", ""),
-                address=values.get("address", ""),
-                coordinates=coordinates,
-            )
+        session = self._controller.session
+        row = session.add_location()
+        identifier = values.get("location_id", "") or values.get("id", "") or row.id
+        session.update_location(
+            len(session.locations) - 1,
+            id=identifier,
+            name=values.get("location_name", "") or values.get("name", "") or identifier,
+            capacity=values.get("capacity", ""),
+            minimum_capacity=values.get("minimum_capacity", "")
+            or values.get("min_capacity", "")
+            or values.get("minimum", ""),
+            address=values.get("address", ""),
+            coordinates=_import_coordinates(values),
         )
 
     def _note_text(self) -> str:

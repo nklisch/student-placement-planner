@@ -29,7 +29,7 @@ The workflow always signs the generated artifacts, but a signature is not automa
 When no signing secrets are configured:
 
 - Windows creates an ephemeral self-signed Authenticode certificate. The file is signed, but another computer does not trust that certificate and Microsoft Defender SmartScreen may show an unknown-publisher warning.
-- macOS applies an ad-hoc signature. Gatekeeper may require the user to right-click the app and choose **Open** once.
+- macOS applies an ad-hoc signature. Gatekeeper behavior depends on macOS version and device policy; follow the [installation guide](INSTALLATION.md) for the supported Open Anyway route when available. Managed devices may require IT approval.
 
 These fallbacks are suitable for development previews, not a friction-free public release. GitHub checksums and build attestations provide independent evidence that a binary came from this repository, but they do not remove operating-system warnings.
 

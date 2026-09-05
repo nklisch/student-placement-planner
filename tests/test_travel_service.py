@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import pytest
+
 from placement_optimizer.domain import Coordinate, Location, Student
 from placement_optimizer.travel import (
     GeocodingResult,
     MatrixEntry,
+    TravelDataError,
     TravelMatrix,
     build_travel_matrix,
     matrix_from_entries,
+    resolve_travel_coordinates,
+    route_reviewed_matrix,
 )
 
 
@@ -63,3 +68,48 @@ def test_manual_matrix_is_ordered_by_student_and_location_ids() -> None:
     assert matrix.distances_meters == ((1000, 2000), (3000, 4000))
     assert matrix.durations_seconds == ((200, 300), (400, 500))
     assert matrix.source == "offline_matrix"
+
+
+async def test_review_preserves_successes_and_every_unresolved_row() -> None:
+    class PartialGeocoder(RecordingGeocoder):
+        async def geocode(self, address):
+            if address == "Bad address":
+                self.addresses.append(address)
+                raise TravelDataError("No match; correct the address or enter coordinates")
+            return await super().geocode(address)
+
+    geocoder = PartialGeocoder()
+    students = (
+        Student("s1", "Missing"),
+        Student("s2", "Bad", "Bad address"),
+        Student("s3", "Good", "Good address"),
+    )
+    locations = (Location("l1", "Work", 3, coordinate=Coordinate(52, -1)),)
+    review = await resolve_travel_coordinates(students, locations, geocoder)
+
+    assert len(review.students) == 3
+    assert review.students[0].coordinate is None
+    assert "required" in review.students[0].error
+    assert review.students[1].coordinate is None
+    assert "No match" in review.students[1].error
+    assert review.students[2].coordinate == Coordinate(51, -1)
+    assert "override" in review.locations[0].source
+    assert geocoder.addresses == ["Bad address", "Good address"]
+    router = RecordingRouter()
+    with pytest.raises(TravelDataError) as error:
+        await route_reviewed_matrix(review, router)
+    assert error.value.item_ids == ("s1", "s2")
+    assert router.calls == 0
+
+
+async def test_review_cancellation_is_not_an_unresolved_match() -> None:
+    import asyncio
+
+    class CancelledGeocoder:
+        async def geocode(self, address):
+            raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        await resolve_travel_coordinates(
+            (Student("s1", "One", "An address"),), (), CancelledGeocoder()
+        )

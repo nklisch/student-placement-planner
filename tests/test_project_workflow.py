@@ -57,6 +57,30 @@ def test_blank_location_capacity_remains_editable_and_unresolved() -> None:
     assert imported.draft_rows[0].as_dict()["name"] == "Library"
 
 
+def test_displayed_csv_headers_preserve_minimum_and_coordinates() -> None:
+    batch = parse_locations_csv(
+        'Name,ID,Capacity,Minimum,Address,Coordinates\nLibrary,L001,3,1,Main Street,"51.5, -0.12"\n'
+    )
+    assert not batch.issues
+    assert batch.items[0].minimum_capacity == 1
+    assert batch.items[0].coordinate.latitude == 51.5
+
+
+@pytest.mark.parametrize("coordinate", ["not a point", "91, 0", "51.5,"])
+def test_invalid_combined_coordinates_retain_original(coordinate) -> None:
+    batch = parse_students_csv(f'Name,Coordinates\nAlice,"{coordinate}"\n')
+    assert batch.error_count == 1
+    assert batch.draft_rows[0].as_dict()["coordinates"] == coordinate
+
+
+def test_populated_unknown_columns_warn_and_retain_values() -> None:
+    batch = parse_locations_csv("Name,Capacity,Constraint,Empty\nLibrary,3,keep together,\n")
+    assert batch.error_count == 0
+    assert len(batch.issues) == 1
+    assert batch.issues[0].level is IssueLevel.WARNING
+    assert batch.draft_rows[0].as_dict()["constraint"] == "keep together"
+
+
 def test_matrix_import_accepts_explicit_no_route() -> None:
     imported = parse_matrix_csv(
         "student_id,location_id,driving_minutes,distance_km\n"

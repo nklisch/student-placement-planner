@@ -259,14 +259,14 @@ This section is normative for Students, Locations, manual times, and bulk choice
 - Click-drag and Shift navigation select ranges.
 - Ctrl/Cmd+A selects the table; Ctrl/Cmd+C copies TSV suitable for Excel.
 - Ctrl/Cmd+V parses a TSV block anchored at the active cell and appends overflow rows when applicable.
-- Valid pasted cells always land. Invalid cells retain their original text and are marked for repair.
+- Valid pasted cells always land. Invalid cells retain their original text and are marked for repair. A travel block larger than its fixed grid keeps in-bounds cells unchanged and reports ignored overflow; extra numbers are never merged into a time.
 - A paste block is one undo operation.
 - Validation runs after editing settles, never blocks typing, and updates issue/readiness state.
 - Add row: Ctrl/Cmd+Plus or Ctrl/Cmd+=.
 - Delete rows: Ctrl/Cmd+Minus, Edit → Delete rows, or the visible `Remove selected` roster action. Removal offers Undo and updates referenced rules as one operation.
 - CSV file drop onto a roster/location table behaves exactly like Import CSV.
 - Pasting split latitude and longitude columns into the combined coordinate column joins them as `latitude, longitude`; it keeps both values and avoids unnecessary repair.
-- Undo is scoped to table operations, paste blocks, and the most recent rule deletion. There is no complicated global cross-step command history.
+- Undo/Redo follows one chronological data-edit history across students, locations, rules, and travel times. Undo always reverses the most recent data operation, even after changing pages; goal selection, travel-mode selection, and file/UI settings are not part of this history. A row removal and its related rule/time cleanup remain one operation. Toast Undo is one-shot and applies only to the removal it describes, never an intervening edit.
 
 ## 9. Import and recovery dialogs
 
@@ -366,3 +366,24 @@ Component hierarchy: one filled accent primary action; tinted banners; outlined 
 - No per-row icon clutter.
 - No custom popover framework.
 - No bespoke inline rule editor framework.
+
+## 15. Audit-remediation interaction decisions
+
+- CSV accepts displayed roster headings, including Minimum and combined Coordinates,
+  as well as the documented machine-friendly aliases. Populated unknown columns
+  require an explicit warning. Missing imported IDs are generated uniquely.
+- Editing a duplicate or blank ID must retain the original row's rule ownership
+  through repair, Undo, and Save/Open. ID swaps apply atomically to references.
+- An address edit with existing coordinates offers use-new-address (clear the old
+  coordinates), retain-coordinate-override, or cancel. Coordinates always take
+  precedence when explicitly retained. Address changes from paste clear old
+  coordinates unless replacement coordinates are supplied in the same block.
+- Address review retains successful matches alongside unresolved rows, with local
+  row identity and repairable coordinates. Failed replacements of manual driving
+  values remain invalid draft cells; errors do not silently leave the old values ready.
+- Export times includes every pair, including blank times, so it doubles as a template.
+- Old-result export/print requires an explicit choice; print carries a previous-result
+  warning. Failed calculations do not show achievement statistics or enable assignment
+  export. Rule editors explain empty eligibility and prevent silent duplicate limits.
+- Help and the public user guide cover installation, concrete CSV examples, explicit
+  project saving/reopening, and the distinction between a project and shared results.

@@ -18,11 +18,20 @@ from placement_optimizer.travel.base import (
 
 @dataclass(frozen=True, slots=True)
 class ResolvedPlace:
+    """One local review row; an unresolved address has no coordinate and an error.
+
+    Defaulted metadata keeps existing five-argument review construction compatible.
+    Names and item IDs remain local; providers only receive addresses/coordinates.
+    """
+
     item_id: str
     name: str
     entered_address: str
     matched_address: str
-    coordinate: Coordinate
+    coordinate: Coordinate | None
+    error: str = ""
+    source: str = "Address match"
+    coordinate_override: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,7 +45,7 @@ async def resolve_travel_coordinates(
     locations: Sequence[Location],
     geocoder: Geocoder,
 ) -> TravelCoordinateReview:
-    """Resolve only address data so users can review matches before routing."""
+    """Return every row for review, retaining successes alongside repairable failures."""
 
     cache: dict[str, GeocodingResult] = {}
     return TravelCoordinateReview(
@@ -51,6 +60,14 @@ async def route_reviewed_matrix(
 ) -> TravelMatrix:
     """Calculate a matrix from coordinates the user has already reviewed."""
 
+    unresolved = tuple(
+        item.item_id for item in (*review.students, *review.locations) if item.coordinate is None
+    )
+    if unresolved:
+        raise TravelDataError(
+            "Review and correct the unresolved addresses before calculating driving times",
+            item_ids=unresolved,
+        )
     return await router.route_matrix(
         tuple(item.coordinate for item in review.students),
         tuple(item.coordinate for item in review.locations),
@@ -136,22 +153,41 @@ async def _resolve_places(
                     address,
                     "Coordinates provided",
                     place.coordinate,
+                    source="Coordinate override — address not looked up",
+                    coordinate_override=True,
                 )
             )
             continue
         if not address:
-            raise TravelDataError(
-                "an address or latitude/longitude is required",
-                item_ids=(place.id,),
+            resolved.append(
+                ResolvedPlace(
+                    place.id,
+                    place.name,
+                    address,
+                    "",
+                    None,
+                    "An address or latitude/longitude is required.",
+                    "Needs correction",
+                )
             )
+            continue
         normalized = " ".join(address.casefold().split())
         if normalized not in cache:
             try:
                 cache[normalized] = await geocoder.geocode(address)
             except TravelDataError as error:
-                if error.item_ids:
-                    raise
-                raise TravelDataError(str(error), item_ids=(place.id,)) from error
+                resolved.append(
+                    ResolvedPlace(
+                        place.id,
+                        place.name,
+                        address,
+                        "",
+                        None,
+                        str(error),
+                        "Needs correction",
+                    )
+                )
+                continue
         result = cache[normalized]
         resolved.append(
             ResolvedPlace(

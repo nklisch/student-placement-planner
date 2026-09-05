@@ -5,9 +5,11 @@ from __future__ import annotations
 import csv
 import io
 import os
+from dataclasses import replace
+from html import escape
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -28,11 +30,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from placement_optimizer.application import TravelMode, TravelWorkflow
+from placement_optimizer.application import TravelInput, TravelMode, TravelWorkflow
 from placement_optimizer.projects import parse_matrix_csv
 from placement_optimizer.travel import (
     InstalledMapPack,
     MapPackStore,
+    ResolvedPlace,
     TravelCoordinateReview,
     TravelMatrix,
 )
@@ -66,6 +69,9 @@ COMMUNITY_COPY = (
 
 
 class TravelPage(QWidget):
+    # IDs are for local navigation only, never provider request data.
+    addressRepairRequested = Signal(str, str)
+
     def __init__(
         self,
         controller: SessionController,
@@ -101,12 +107,26 @@ class TravelPage(QWidget):
         self._provider_mode: TravelMode | None = None
         self._provider_result: object | None = None
         self._review: TravelCoordinateReview | None = None
+        self._review_cache: TravelCoordinateReview | None = None
+        self._review_cache_context: tuple[TravelMode | None, str] | None = None
+        self._reused_places: dict[tuple[str, str], ResolvedPlace] = {}
+        self._address_links: list[tuple[str, str]] = []
         self._seen_travel_version = controller.session.travel_input_version
+        self._seen_grid_signature = self._grid_signature()
+        self._show_mode_details: bool | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 12)
         layout.setSpacing(10)
-        layout.addWidget(make_label("Travel times", role="title"))
+        heading = QHBoxLayout()
+        heading.addWidget(make_label("Travel times", role="title"))
+        heading.addStretch(1)
+        self.mode_details_button = QPushButton("About travel options")
+        self.mode_details_button.setProperty("kind", "quiet")
+        self.mode_details_button.setCheckable(True)
+        self.mode_details_button.toggled.connect(self._toggle_mode_details)
+        heading.addWidget(self.mode_details_button)
+        layout.addLayout(heading)
         layout.addWidget(make_label(INTRO, role="secondary", wrap=True))
 
         cards = QHBoxLayout()
@@ -135,6 +155,14 @@ class TravelPage(QWidget):
 
         self.status_label = make_label("", role="secondary", wrap=True)
         layout.addWidget(self.status_label)
+        self.source_label = make_label("", role="secondary", wrap=True)
+        layout.addWidget(self.source_label)
+        self.address_issues = make_label("", role="secondary", wrap=True)
+        self.address_issues.setTextFormat(Qt.TextFormat.RichText)
+        self.address_issues.setOpenExternalLinks(False)
+        self.address_issues.linkActivated.connect(self._repair_address_link)
+        self.address_issues.hide()
+        layout.addWidget(self.address_issues)
         self.operation_bar = QFrame()
         self.operation_bar.setProperty("banner", "info")
         operation_layout = QHBoxLayout(self.operation_bar)
@@ -192,6 +220,16 @@ class TravelPage(QWidget):
         self.completeness_label = make_label("", role="secondary")
         toolbar.addWidget(self.completeness_label)
         layout.addLayout(toolbar)
+        self.legend = make_label("Minutes · x = no route · blank = not entered", role="secondary")
+        layout.addWidget(self.legend)
+        self.import_report = make_label("", role="secondary", wrap=True)
+        self.import_report.setTextFormat(Qt.TextFormat.PlainText)
+        self.import_report_area = QScrollArea()
+        self.import_report_area.setWidgetResizable(True)
+        self.import_report_area.setMaximumHeight(120)
+        self.import_report_area.setWidget(self.import_report)
+        self.import_report_area.hide()
+        layout.addWidget(self.import_report_area)
 
         self.progress = QProgressBar()
         self.progress.setTextVisible(False)
@@ -427,8 +465,9 @@ class TravelPage(QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.addWidget(
             make_label(
-                "These are the latest calculated driving minutes. Recalculate after "
-                "changing addresses.",
+                "This grid includes the last calculation and any later manual edits. "
+                "Recalculate after changing addresses.\n"
+                "Minutes · x = no route · blank = not entered.\n" + self.source_label.text(),
                 role="secondary",
                 wrap=True,
             )
@@ -495,6 +534,8 @@ class TravelPage(QWidget):
         )
 
     def _review_addresses(self, mode: TravelMode) -> None:
+        if self._provider_worker is not None:
+            return
         if self._controller.session.travel_mode is not mode:
             self._controller.session.set_travel_mode(mode)
             self._controller.notify()
@@ -502,6 +543,8 @@ class TravelPage(QWidget):
         if travel_input is None:
             self._host.show_toast("Fix the student and location details first.")
             return
+        self._show_address_preflight(travel_input)
+        travel_input = self._reuse_review_matches(travel_input, mode)
         if mode is TravelMode.COMMUNITY:
 
             async def task(_worker):
@@ -544,6 +587,89 @@ class TravelPage(QWidget):
             task,
             "Finding the entered addresses…",
             input_version=travel_input.input_version,
+        )
+
+    def _repair_address_link(self, link: str) -> None:
+        try:
+            kind, item_id = self._address_links[int(link)]
+        except (ValueError, IndexError):
+            return
+        self.addressRepairRequested.emit(kind, item_id)
+
+    def _show_address_preflight(self, travel_input: TravelInput) -> None:
+        self._address_links = []
+        links = []
+        for kind, places in (
+            ("Student", travel_input.students),
+            ("Location", travel_input.locations),
+        ):
+            for place in places:
+                if place.coordinate is None and not (place.address or "").strip():
+                    index = len(self._address_links)
+                    self._address_links.append((kind, place.id))
+                    links.append(f'<a href="{index}">{escape(kind)}: {escape(place.name)}</a>')
+        self.address_issues.setText(
+            "Add an address or coordinates: " + "; ".join(links) if links else ""
+        )
+        self.address_issues.setVisible(bool(links))
+
+    def _review_context(self, mode: TravelMode | None) -> tuple[TravelMode | None, str]:
+        pack = (
+            self._pack_store.active()
+            if mode is TravelMode.OFFLINE and self._pack_store is not None
+            else None
+        )
+        # Display names can collide across regions; cache against the installed pack identity.
+        identity = f"{pack.path}:{pack.manifest.addresses.sha256}" if pack is not None else ""
+        return mode, identity
+
+    def _reuse_review_matches(self, travel_input: TravelInput, mode: TravelMode) -> TravelInput:
+        """Reuse only unchanged address matches; no cache is persisted to disk."""
+        self._reused_places = {}
+        previous = self._review_cache
+        if previous is None or self._review_cache_context != self._review_context(mode):
+            return travel_input
+
+        def reuse(kind, places, old_places):
+            old_by_id = {place.item_id: place for place in old_places}
+            values = []
+            for place in places:
+                old = old_by_id.get(place.id)
+                if (
+                    place.coordinate is None
+                    and old is not None
+                    and old.coordinate is not None
+                    and bool(old.entered_address)
+                    and not old.coordinate_override
+                    and (place.address or "").strip() == old.entered_address
+                ):
+                    self._reused_places[(kind, place.id)] = old
+                    place = replace(place, coordinate=old.coordinate)
+                values.append(place)
+            return tuple(values)
+
+        return replace(
+            travel_input,
+            students=reuse("Student", travel_input.students, previous.students),
+            locations=reuse("Location", travel_input.locations, previous.locations),
+        )
+
+    def _restore_retained_labels(self, review: TravelCoordinateReview) -> TravelCoordinateReview:
+        def restore(kind, places):
+            return tuple(
+                replace(
+                    place,
+                    matched_address=self._reused_places[(kind, place.item_id)].matched_address,
+                    source="Retained address match — unchanged address",
+                    coordinate_override=False,
+                )
+                if (kind, place.item_id) in self._reused_places
+                else place
+                for place in places
+            )
+
+        return TravelCoordinateReview(
+            restore("Student", review.students), restore("Location", review.locations)
         )
 
     def _calculate_reviewed(self, mode: TravelMode, review: TravelCoordinateReview) -> None:
@@ -637,15 +763,56 @@ class TravelPage(QWidget):
             )
             return
         if self._provider_operation == "review" and isinstance(result, TravelCoordinateReview):
+            result = self._restore_retained_labels(result)
+            self._review_cache = result
+            self._review_cache_context = self._review_context(self._provider_mode)
             dialog = AddressReviewDialog(result, self)
-            if dialog.exec():
+            retry = []
+            repair = []
+            dialog.retryRequested.connect(lambda: retry.append(True))
+            dialog.addressRepairRequested.connect(
+                lambda kind, item_id: repair.append((kind, item_id))
+            )
+            review_mode = self._provider_mode
+            review_version = self._provider_input_version
+            review_context = self._review_cache_context
+            accepted = dialog.exec()
+            # Modal dialogs process background import/pack completions too. Never
+            # apply a reviewed positional matrix to a roster changed beneath it.
+            if (
+                session is not self._controller.session
+                or review_version != session.travel_input_version
+                or review_mode is not session.travel_mode
+                or review_context != self._review_context(review_mode)
+            ):
+                self._message_for_mode(
+                    review_mode,
+                    "Your data or selected region changed during review. Review addresses again "
+                    "before calculating; these coordinate edits were not applied.",
+                )
+                return
+            if accepted:
                 self._apply_coordinate_corrections(dialog.corrections())
                 self._review = dialog.review()
                 mode = self._provider_mode
                 if mode is not None:
                     self._calculate_reviewed(mode, self._review)
+            elif retry or repair:
+                self._review_cache = dialog.review()
+                self._apply_coordinate_corrections(dialog.corrections())
+                if repair:
+                    self.addressRepairRequested.emit(*repair[0])
+                elif self._provider_mode is not None:
+                    self._review_addresses(self._provider_mode)
+            else:
+                self._message_for_mode(
+                    self._provider_mode,
+                    "Address review cancelled. Existing travel times were kept; "
+                    "successful matches are available when you retry.",
+                )
             return
         if self._provider_operation == "matrix" and isinstance(result, TravelMatrix):
+            self._controller.undo.record()
             session.set_calculated_matrix(result)
             self._controller.notify()
             self._message_for_mode(
@@ -656,6 +823,7 @@ class TravelPage(QWidget):
     def _apply_coordinate_corrections(self, corrections) -> None:
         if not corrections:
             return
+        self._controller.undo.record()
         session = self._controller.session
         student_indexes = {row.id.strip(): index for index, row in enumerate(session.students)}
         location_indexes = {row.id.strip(): index for index, row in enumerate(session.locations)}
@@ -787,8 +955,23 @@ class TravelPage(QWidget):
         self._set_mode(mode)
         self._review_addresses(mode)
 
+    def _toggle_mode_details(self, checked: bool) -> None:
+        self._show_mode_details = checked
+        self._sync_mode_cards()
+
     def _sync_mode_cards(self) -> None:
-        mode = self._controller.session.travel_mode
+        session = self._controller.session
+        mode = session.travel_mode
+        expanded = (
+            self._show_mode_details
+            if self._show_mode_details is not None
+            else not bool(session.active_students and session.active_locations)
+        )
+        self.mode_details_button.blockSignals(True)
+        self.mode_details_button.setChecked(expanded)
+        self.mode_details_button.blockSignals(False)
+        for card in (self.manual_card, self.offline_card, self.online_card):
+            card.description.setVisible(expanded)
         for card, card_modes in (
             (self.manual_card, {TravelMode.MANUAL}),
             (self.offline_card, {TravelMode.OFFLINE}),
@@ -814,14 +997,59 @@ class TravelPage(QWidget):
             }[mode]
         )
 
+    def _grid_signature(self) -> tuple[tuple[tuple[str, str, str], ...], ...]:
+        session = self._controller.session
+        return tuple(
+            tuple((row.key, row.name, row.id) for row in rows)
+            for rows in (session.active_students, session.active_locations)
+        )
+
     def refresh_page(self) -> None:
         session = self._controller.session
-        if session.travel_input_version != self._seen_travel_version:
+        signature = self._grid_signature()
+        previous_signature = self._seen_grid_signature
+        self._seen_grid_signature = signature
+        structure_changed = any(
+            tuple(row[0] for row in current) != tuple(row[0] for row in previous)
+            for current, previous in zip(signature, previous_signature, strict=True)
+        )
+        if session.travel_input_version != self._seen_travel_version or structure_changed:
             self._seen_travel_version = session.travel_input_version
             self._review = None
             self.model.refresh()
+        else:
+            # Names and IDs label the grid but need not invalidate road routes.
+            # Header-only updates also preserve the current cell/editor.
+            for current, previous, orientation in zip(
+                signature,
+                previous_signature,
+                (Qt.Orientation.Vertical, Qt.Orientation.Horizontal),
+                strict=True,
+            ):
+                if current != previous and current:
+                    self.model.headerDataChanged.emit(orientation, 0, len(current) - 1)
         self._sync_mode_cards()
 
+        matrix = session.calculated_matrix
+        if matrix is None:
+            self.source_label.setText("Source: entered or imported times.")
+        else:
+            source = {
+                "community_osrm": "Community OpenStreetMap services",
+                "openrouteservice": "openrouteservice",
+                "google_routes": "Google Maps",
+            }.get(
+                matrix.source,
+                "Offline regional map" if matrix.source.startswith("valhalla:") else matrix.source,
+            )
+            self.source_label.setText(
+                f"Source: {source}. "
+                + (
+                    "Retained from an earlier calculation; needs updating."
+                    if session.calculated_travel_is_stale
+                    else "Calculated times; later manual edits may also be present."
+                )
+            )
         readiness = session.readiness()
         filled, total = self.model.completeness()
         self.completeness_label.setText(f"Filled {filled} of {total}" if total else "")
@@ -914,7 +1142,11 @@ class TravelPage(QWidget):
         self._import_worker.start()
 
     def _apply_import(self, batch) -> None:
-        if self._import_session is not self._controller.session:
+        import_session = self._import_session
+        self._controller.apply_import(lambda: self._apply_import_now(batch, import_session))
+
+    def _apply_import_now(self, batch, import_session) -> None:
+        if import_session is not self._controller.session:
             return
         if not batch.items and not batch.draft_rows:
             message = batch.issues[0].message if batch.issues else "No rows were found."
@@ -927,27 +1159,95 @@ class TravelPage(QWidget):
         self.model.undo.record()
         applied = 0
         unmatched = 0
-        for entry in batch.items:
-            student_key = student_keys.get(entry.student_id)
-            location_key = location_keys.get(entry.location_id)
+        invalid = 0
+        reports = [f"Row {issue.row}: {issue.message}" for issue in batch.issues]
+        entries = {(entry.student_id, entry.location_id): entry for entry in batch.items}
+        groups: dict[tuple[str, str], list] = {}
+        for draft in batch.draft_rows:
+            row = draft.as_dict()
+            pair = (
+                (row.get("student_id") or row.get("student") or "").strip(),
+                (row.get("location_id") or row.get("location") or "").strip(),
+            )
+            groups.setdefault(pair, []).append(draft)
+        # Legacy callers may supply parsed entries only; normal imports always
+        # use draft rows so failed replacements cannot leave old values ready.
+        if not batch.draft_rows:
+            groups = {pair: [] for pair in entries}
+        bad_rows = {issue.row for issue in batch.issues if issue.level == "error"}
+        for pair, drafts in groups.items():
+            student_key = student_keys.get(pair[0])
+            location_key = location_keys.get(pair[1])
             if student_key is None or location_key is None:
-                unmatched += 1
+                unmatched += max(len(drafts), 1)
+                reports.append(f"Unknown student/location IDs: {pair[0]}, {pair[1]}.")
                 continue
-            value = "x" if entry.duration_seconds is None else f"{entry.duration_seconds / 60:g}"
-            session.set_manual_time(student_key, location_key, value)
-            session.set_manual_distance(student_key, location_key, entry.distance_meters)
-            applied += 1
+            entry = entries.get(pair)
+            if len(drafts) > 1 or any(row.row in bad_rows for row in drafts) or entry is None:
+                reports.extend(
+                    f"Row {row.row} retained input: "
+                    + "; ".join(f"{field}={value}" for field, value in row.values)
+                    for row in drafts
+                )
+                raw_values = [self._draft_time_text(row.as_dict()) for row in drafts]
+                value = raw_values[0] if raw_values else ""
+                if len(drafts) > 1:
+                    value = " / ".join(raw_values) + " [duplicate pair — choose one]"
+                    reports.append(
+                        f"Repeated pair {pair[0]}, {pair[1]}: choose one time in the grid."
+                    )
+                elif value:
+                    # A bad distance beside a valid time must also block readiness.
+                    # Preserve simple invalid text verbatim; annotate values that
+                    # would otherwise be accepted as a usable time/no-route cell.
+                    try:
+                        float(value)
+                        numeric = True
+                    except ValueError:
+                        numeric = False
+                    if numeric or value.casefold() in {"x", "-", "no route"}:
+                        details = "; ".join(
+                            f"{field}={text}"
+                            for field, text in drafts[0].values
+                            if field not in {"student_id", "student", "location_id", "location"}
+                        )
+                        value += f" [invalid CSV row: {details}]"
+                session.set_manual_time(student_key, location_key, value)
+                session.set_manual_distance(student_key, location_key, None)
+                invalid += 1
+            else:
+                value = (
+                    "x" if entry.duration_seconds is None else f"{entry.duration_seconds / 60:g}"
+                )
+                session.set_manual_time(student_key, location_key, value)
+                session.set_manual_distance(student_key, location_key, entry.distance_meters)
+                applied += 1
         self.model.refresh()
         self._controller.notify()
+        summary = (
+            f"Filled {applied} cells; {invalid} cells marked for repair; "
+            f"{unmatched} rows have unknown IDs."
+        )
+        self.import_report.setText(summary + ("\n" + "\n".join(reports) if reports else ""))
+        self.import_report_area.setVisible(bool(reports or invalid or unmatched))
+        self._host.show_toast(
+            summary if reports or invalid or unmatched else f"Filled {applied} cells."
+        )
 
-        problems = unmatched + batch.error_count
-        if problems:
-            self._host.show_toast(
-                f"Filled {applied} cells; {problems} rows didn't match the current "
-                "students and locations."
-            )
-        else:
-            self._host.show_toast(f"Filled {applied} cells.")
+    @staticmethod
+    def _draft_time_text(row: dict[str, str]) -> str:
+        for field in ("duration_seconds", "driving_minutes", "duration_minutes", "minutes"):
+            if row.get(field, "").strip():
+                raw = row[field].strip()
+                if field == "duration_seconds":
+                    try:
+                        seconds = float(raw)
+                        if 0 <= seconds <= 1_000_000_000:
+                            return f"{seconds / 60:g}"
+                    except ValueError:
+                        pass
+                return raw
+        return ""
 
     def _import_failed(self) -> None:
         self._host.show_toast("That file couldn't be read. Check it and try again.")
@@ -983,8 +1283,6 @@ class TravelPage(QWidget):
         for student in session.active_students:
             for location in session.active_locations:
                 raw = session.manual_times.get((student.key, location.key), "").strip()
-                if not raw:
-                    continue
                 distance = session.manual_distances_meters.get((student.key, location.key))
                 writer.writerow(
                     [
@@ -1008,7 +1306,13 @@ class TravelPage(QWidget):
         self._import_session = None
         self._provider_session = None
         self._review = None
+        self._review_cache = None
+        self._review_cache_context = None
+        self._reused_places = {}
+        self.address_issues.hide()
+        self.import_report_area.hide()
         self.model.hard_reset()
         self._seen_travel_version = self._controller.session.travel_input_version
+        self._seen_grid_signature = self._grid_signature()
         self._sync_mode_cards()
         self.refresh_page()

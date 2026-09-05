@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QTabBar,
     QTableView,
@@ -117,6 +118,7 @@ class ResultsPage(QWidget):
         content_layout.setSpacing(10)
 
         self.banner = Banner()
+        self.banner.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self.banner.hide()
         content_layout.addWidget(self.banner)
 
@@ -125,6 +127,9 @@ class ResultsPage(QWidget):
         content_layout.addWidget(self.warnings)
 
         self.recovery_actions = QWidget()
+        self.recovery_actions.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum
+        )
         recovery_layout = QHBoxLayout(self.recovery_actions)
         recovery_layout.setContentsMargins(0, 0, 0, 0)
         recovery_layout.setSpacing(8)
@@ -194,12 +199,19 @@ class ResultsPage(QWidget):
         self.capacity_box.setAccessibleDescription(
             "Bars and numbers show assigned students out of each location's capacity."
         )
-        capacity_scroll = QScrollArea()
+        capacity_scroll = self.capacity_scroll = QScrollArea()
         capacity_scroll.setWidgetResizable(True)
         capacity_scroll.setMinimumHeight(120)
         capacity_scroll.setMaximumHeight(180)
         capacity_scroll.setWidget(self.capacity_box)
         content_layout.addWidget(capacity_scroll)
+
+        self.empty_result_space = QWidget()
+        self.empty_result_space.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
+        )
+        content_layout.addWidget(self.empty_result_space, stretch=1)
+        self.empty_result_space.hide()
 
         actions = QHBoxLayout()
         actions.setSpacing(8)
@@ -234,7 +246,14 @@ class ResultsPage(QWidget):
         return self._project
 
     def has_usable_result(self) -> bool:
-        return bool(self._outcome and self._outcome.result and self._project)
+        return bool(
+            self._outcome
+            and self._outcome.kind in (OutcomeKind.SUCCESS, OutcomeKind.NEEDS_ATTENTION)
+            and self._outcome.result
+            and self._outcome.result.proof in (SolveProof.OPTIMAL, SolveProof.FEASIBLE)
+            and self._outcome.result.placements
+            and self._project
+        )
 
     def show_outcome(self, outcome: SolveProjectOutcome, project: PlacementProject) -> None:
         self._outcome = outcome
@@ -257,7 +276,8 @@ class ResultsPage(QWidget):
         stale = self._controller.session.results_are_stale
         result = outcome.result
 
-        if stale:
+        usable = self.has_usable_result()
+        if stale and usable:
             self.banner.show_message(
                 "warning",
                 "These placements predate your latest changes.",
@@ -268,7 +288,7 @@ class ResultsPage(QWidget):
             self.banner.show_message(kind, title, detail)
 
         bullets: list[str] = []
-        if result is not None:
+        if usable and result is not None:
             over_target = next(
                 (
                     metric.value
@@ -290,13 +310,24 @@ class ResultsPage(QWidget):
                 bullets.append(f"Not placed: {joined}.")
         self.warnings.setText("\n".join(f"• {line}" for line in bullets))
         self.warnings.setVisible(bool(bullets))
-        self.recovery_actions.setVisible(outcome.kind is OutcomeKind.INFEASIBLE)
+        self.recovery_actions.setVisible(not usable)
+        for widget in (
+            self.stat_longest,
+            self.stat_average,
+            self.stat_choices,
+            self.stat_total,
+            self.toggle,
+            self.tables,
+            self.capacity_scroll,
+        ):
+            widget.setVisible(usable)
 
-        if result is not None and self._project is not None:
+        if usable and result is not None and self._project is not None:
             self._render_result(result, self._project)
         else:
             self._render_empty_result()
 
+        self.empty_result_space.setVisible(not self.has_usable_result())
         self.export_button.setEnabled(self.has_usable_result())
         self.print_button.setEnabled(self.has_usable_result())
 

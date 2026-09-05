@@ -58,10 +58,10 @@ def parse_students_csv(text: str) -> ImportBatch[Student]:
     ):
         return ImportBatch((), (issue,))
     students: list[Student] = []
-    issues: list[ImportIssue] = []
+    issues = _unknown_column_issues(rows, "student")
     seen: set[str] = set()
     for row_number, row in rows:
-        student_id = _value(row, "student_id", "id") or f"S{row_number - 1:03d}"
+        student_id = _value(row, "student_id", "id") or _generated_id(rows, seen, "student", "S")
         name = _value(row, "student_name", "name") or student_id
         if student_id in seen:
             issues.append(
@@ -96,10 +96,10 @@ def parse_locations_csv(text: str) -> ImportBatch[Location]:
     ):
         return ImportBatch((), (issue,))
     locations: list[Location] = []
-    issues: list[ImportIssue] = []
+    issues = _unknown_column_issues(rows, "location")
     seen: set[str] = set()
     for row_number, row in rows:
-        location_id = _value(row, "location_id", "id") or f"L{row_number - 1:03d}"
+        location_id = _value(row, "location_id", "id") or _generated_id(rows, seen, "location", "L")
         name = _value(row, "location_name", "name") or location_id
         if location_id in seen:
             issues.append(
@@ -112,7 +112,7 @@ def parse_locations_csv(text: str) -> ImportBatch[Location]:
             if not capacity_text:
                 raise ValueError("Capacity is required")
             capacity = int(capacity_text)
-            minimum_text = _value(row, "minimum_capacity", "min_capacity")
+            minimum_text = _value(row, "minimum_capacity", "min_capacity", "minimum")
             minimum_capacity = 0 if not minimum_text else int(minimum_text)
             if capacity < 0 or minimum_capacity < 0:
                 raise ValueError("Capacity values cannot be negative")
@@ -288,7 +288,59 @@ def _value(row: dict[str, str], *names: str) -> str:
     return ""
 
 
+def _generated_id(
+    rows: list[tuple[int, dict[str, str]]], seen: set[str], kind: str, prefix: str
+) -> str:
+    reserved = seen | {_value(row, f"{kind}_id", "id") for _, row in rows}
+    number = 1
+    while f"{prefix}{number:03d}" in reserved:
+        number += 1
+    return f"{prefix}{number:03d}"
+
+
+def _unknown_column_issues(rows: list[tuple[int, dict[str, str]]], kind: str) -> list[ImportIssue]:
+    known = {
+        "id",
+        "name",
+        f"{kind}_id",
+        f"{kind}_name",
+        "address",
+        "coordinates",
+        "latitude",
+        "lat",
+        "longitude",
+        "lon",
+        "lng",
+    }
+    if kind == "location":
+        known.update({"capacity", "minimum", "minimum_capacity", "min_capacity"})
+    return [
+        ImportIssue(
+            number,
+            f"Column '{field}' is not imported; retained value: {value}",
+            IssueLevel.WARNING,
+            field,
+        )
+        for number, row in rows
+        for field, value in row.items()
+        if field not in known and value
+    ]
+
+
 def _coordinate(row: dict[str, str]) -> Coordinate | None:
+    combined = _value(row, "coordinates")
+    if combined:
+        parts = combined.split(",")
+        if len(parts) != 2:
+            raise ValueError("Coordinates must be latitude, longitude")
+        try:
+            coordinate = Coordinate(float(parts[0]), float(parts[1]))
+        except ValueError as error:
+            raise ValueError("Latitude or longitude is not a valid coordinate") from error
+        separate = _coordinate({key: value for key, value in row.items() if key != "coordinates"})
+        if separate is not None and separate != coordinate:
+            raise ValueError("Combined and separate coordinates disagree; choose one")
+        return coordinate
     latitude = _value(row, "latitude", "lat")
     longitude = _value(row, "longitude", "lon", "lng")
     if not latitude and not longitude:

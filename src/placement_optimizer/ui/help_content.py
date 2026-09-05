@@ -28,7 +28,7 @@ GOAL_HELP = {
         "Keeps the longest drive as short as possible, then reduces the number of long drives and the total driving."
     ),
     "Lowest total driving": "Makes the combined driving time of all students as low as possible.",
-    "Choices first": "Gives students their ranked choices wherever possible, then shortens drives.",
+    "Choices first": "Reduces the total ranked-choice penalty first, then shortens drives. It does not guarantee a listed choice for everyone.",
     "Custom": "Uses the priority order chosen in More options.",
     "More options…": "Choose the exact order of goals, commute target, and calculation time.",
 }
@@ -89,7 +89,48 @@ HELP_TOPICS = (
             HelpEntry(
                 "Try without entering data",
                 "Choose File → Load sample data to explore a complete example. You'll be asked "
-                "whether to save the project you have open first.",
+                "whether to save the project you have open first. The sample needs no internet. "
+                "Fair commute can give 0 of 2 students a listed choice while satisfying every required rule; try Choices first to compare.",
+            ),
+        ),
+    ),
+    HelpTopic(
+        "Save, open, and share",
+        "There is no automatic roster save. Save explicitly to keep your editable work.",
+        (
+            HelpEntry(
+                "Save a project",
+                "Choose File → Save or Save As… to write a .spp project containing rosters, rules, travel data, and planning settings. Save regularly and before closing.",
+            ),
+            HelpEntry(
+                "Open a project",
+                "Choose File → Open… and select your saved .spp file to continue planning. Recalculate placements when you need results. Online API keys are not saved in the project.",
+            ),
+            HelpEntry(
+                "Share results",
+                "Export results produces a placement CSV for spreadsheets; Print opens a preview. Neither restores your editable project. Export times saves only travel data. Store projects, exports, and printouts under your school's student-data rules.",
+            ),
+        ),
+    ),
+    HelpTopic(
+        "CSV imports",
+        "Roster imports append rows; they do not update existing rows by ID. Start a new project for a replacement roster, or remove rows deliberately before importing.",
+        (
+            HelpEntry(
+                "Student example",
+                "Use a header row: Name,ID,Address,Coordinates. An example data row is Alex Morgan,S001,,. Name is required; omit IDs or leave them blank to generate unique codes. student_name and student_id are also accepted headers.",
+            ),
+            HelpEntry(
+                "Location example",
+                "Use Name,ID,Capacity,Minimum,Address,Coordinates, followed by a row such as North Clinic,L001,2,0,,. location_name, location_id, and minimum_capacity (or min_capacity) are accepted alternatives. Minimum is optional; Capacity is required.",
+            ),
+            HelpEntry(
+                "Coordinates and headers",
+                'Headers are case-insensitive. Quote combined coordinates in CSV, for example "51.5074, -0.1278". Separate latitude and longitude columns are also accepted. Check warnings for unrecognized columns; roster CSVs do not import choices or other rules.',
+            ),
+            HelpEntry(
+                "Travel example",
+                "Use student_id,location_id,driving_minutes,distance_km, followed by S001,L001,12,. Distance is optional. Travel imports update matching ID pairs, not roster rows. Export times… makes a template with every current pair, including blanks.",
             ),
         ),
     ),
@@ -139,11 +180,11 @@ HELP_TOPICS = (
             ),
             HelpEntry(
                 "Driving limit",
-                "Set a strict maximum driving time. No student can be placed somewhere the drive would be over the limit.",
+                "Set a strict maximum driving time. An individual limit overrides the general limit: a student with a 45-minute limit may drive up to 45 minutes even if the general limit is 30. No assigned drive can exceed its applicable limit.",
             ),
             HelpEntry(
                 "Allowed locations",
-                "Restrict a student to selected locations. Leave every location checked to allow anywhere.",
+                "Restrict a student to selected locations. Leave every location checked to allow anywhere. Checking none means the student cannot be placed, not that there is no restriction.",
             ),
             HelpEntry(
                 "When rules conflict",
@@ -169,7 +210,11 @@ HELP_TOPICS = (
             ),
             HelpEntry(
                 "Import and export",
-                "Imported CSV files are matched to your students and locations by their IDs. Use Export times… to produce a file in the exact format the import expects.",
+                "Imported CSV files update student/location pairs matched by their IDs. Use Export times… for a template containing every pair, including blank times. A blank is unfinished, not no route. Review import issues and repair marked values before calculating.",
+            ),
+            HelpEntry(
+                "Addresses and coordinates",
+                "Coordinates take precedence over an address. When changing an address with coordinates, choose Use the new address to clear the old point, or keep the coordinates to continue using that point. You can clear Coordinates yourself before looking up an address again. Repair unresolved address rows and review matches before calculating.",
             ),
             HelpEntry(
                 "Using maps",
@@ -185,6 +230,14 @@ HELP_TOPICS = (
             HelpEntry("Lowest total driving", GOAL_HELP["Lowest total driving"]),
             HelpEntry("Choices first", GOAL_HELP["Choices first"]),
             HelpEntry("More options", GOAL_HELP["More options…"]),
+            HelpEntry(
+                "Target versus limit",
+                "The commute target counts drives above a preferred threshold; it does not forbid them. Set a strict maximum on Rules → Limit driving time when longer drives must not be allowed.",
+            ),
+            HelpEntry(
+                "How choices are scored",
+                "First choice has penalty 0, second 1, third 2. An unlisted location has penalty equal to the number of choices that student listed; no listed choices means no penalty. Choices first minimizes the sum, not the number missing a choice. Required rules still apply.",
+            ),
             HelpEntry(
                 "Not placed",
                 "Shown only when 'Allow students to be left unplaced' is turned on in More options.",
@@ -205,7 +258,7 @@ HELP_TOPICS = (
         (
             HelpEntry(
                 "Paste",
-                "Copy cells from Excel, Numbers, or another spreadsheet, select the first destination cell, and paste.",
+                "Copy data cells without headings, select the first destination cell, and paste. Students: Name, ID, Address, Coordinates. Locations: Name, ID, Capacity, Minimum, Address, Coordinates. Include blank cells for skipped columns. Travel paste contains minutes only.",
             ),
             HelpEntry(
                 "Copy",
@@ -225,7 +278,7 @@ HELP_TOPICS = (
             ),
             HelpEntry(
                 "Undo",
-                "A pasted block counts as one undo step. Undo works in the table you're in; on the Rules page it reverses the most recent rule deletion.",
+                "A pasted block counts as one undo step. Undo reverses the most recent data edit across the project, even on another page; Redo reapplies it. Roster, rule, and travel edits share this history. Goal, travel-mode, and file settings are not included.",
             ),
         ),
     ),

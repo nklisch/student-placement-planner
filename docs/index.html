@@ -71,7 +71,7 @@
           </article>
           <article class="feature-card">
             <h3>Fairness you choose</h3>
-            <p>Spread drive times fairly, keep total driving low, or honor student choices first. Every rule you set is respected.</p>
+            <p>Spread drive times fairly, keep total driving low, or prioritize ranked choices. Required rules are respected; a ranked choice is a preference, not a guarantee.</p>
           </article>
           <article class="feature-card">
             <h3>Private by default</h3>
@@ -120,7 +120,7 @@
             <span class="badge badge-next">Beta notes</span>
             <ul>
               <li>Windows x64 and Apple-Silicon macOS installers</li>
-              <li>Preview signatures may require a one-time confirmation</li>
+              <li>Preview signatures can trigger warnings; school policy may block installation</li>
               <li>Checksums and GitHub build attestations are published</li>
             </ul>
           </article>
@@ -139,7 +139,8 @@
           <a class="button button-primary" href="https://github.com/nklisch/student-placement-planner/releases/download/v0.1.0b4/Student-Placement-Planner-0.1.0b4-macOS-Apple-Silicon.dmg">Download for Apple-Silicon Mac</a>
           <a class="button button-outline" href="https://github.com/nklisch/student-placement-planner/releases/tag/v0.1.0b4">Release details</a>
         </div>
-        <p class="quiet-line">Preview signatures may require a one-time confirmation. SHA-256 checksums are included on the release page.</p>
+        <p class="quiet-line">Read the <a href="https://github.com/nklisch/student-placement-planner/blob/main/docs/INSTALLATION.md">Windows and Mac installation instructions</a> for source checks, warning guidance, and when to ask school IT. SHA-256 checksums are included on the release page.</p>
+        <p>After opening the app, choose <strong>File → Load sample data</strong>, then <strong>Find placements</strong>. Follow the <a href="https://github.com/nklisch/student-placement-planner/blob/main/docs/USER_GUIDE.md">user guide and downloadable CSV examples</a> for your own project. Save an editable <strong>.spp</strong> project explicitly: there is no automatic roster save, and a result CSV is not a project backup.</p>
       </div>
     </section>
 
@@ -149,7 +150,7 @@
         <details><summary>Is it really free?</summary><p>Yes. Student Placement Planner is open source under the MIT license — free to use, share, and modify.</p></details>
         <details><summary>Where does student data go?</summary><p>The app has no app accounts, cloud database, or telemetry. Project files stay on your computer. If you choose an online route service, only street addresses or coordinates are sent — never names, IDs, choices, capacities, or rules.</p></details>
         <details><summary>Can it work without internet?</summary><p>Yes. Enter driving times yourself, or download an OpenStreetMap region directly from Geofabrik in the app. The app prepares it locally; later address matching and road searches run entirely on your computer.</p></details>
-        <details><summary>Do I need to be good with computers?</summary><p>No. Download the installer above and open it like a normal program. Because this beta has preview signatures, follow the one-time confirmation instructions shown in the download section.</p></details>
+        <details><summary>Do I need to be good with computers?</summary><p>No Python or terminal is needed. Follow the <a href="https://github.com/nklisch/student-placement-planner/blob/main/docs/INSTALLATION.md">installation guide</a>, then try the built-in sample. If your school blocks installation, ask IT rather than disabling operating-system protections.</p></details>
         <details><summary>Does it work on Windows or Mac?</summary><p>The beta supports Windows x64 and Apple-Silicon Mac. An Intel Mac build is not currently available.</p></details>
         <details><summary>How many students can it handle?</summary><p>It is designed for up to about 100 students, which covers a typical school placement run.</p></details>
       </div>
@@ -167,7 +168,8 @@
         <a href="https://github.com/nklisch/student-placement-planner#readme">README</a>
         <a href="https://github.com/nklisch/student-placement-planner/blob/main/docs/GOOGLE_MAPS_SETUP.md">Online routing setup</a>
         <a href="https://github.com/nklisch/student-placement-planner/blob/main/docs/MAP_PACKS.md">Offline map packs</a>
-        <a href="https://github.com/nklisch/student-placement-planner/blob/main/docs/UI_SPECIFICATION.md">Interface guide</a>
+        <a href="https://github.com/nklisch/student-placement-planner/blob/main/docs/USER_GUIDE.md">User guide and CSV examples</a>
+        <a href="https://github.com/nklisch/student-placement-planner/blob/main/docs/INSTALLATION.md">Installation help</a>
       </div>
       <div>
         <strong>Project</strong>

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from contextlib import suppress
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
@@ -120,7 +119,8 @@ class Toast(QFrame):
         layout.addWidget(self.action_button)
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
-        self._timer.timeout.connect(self.hide)
+        self.action_button.clicked.connect(self._invoke_action)
+        self._timer.timeout.connect(self._dismiss)
         self.hide()
 
     def show_message(
@@ -132,14 +132,11 @@ class Toast(QFrame):
         duration_ms: int = 6000,
     ) -> None:
         self.message.setText(text)
-        if self._action is not None:
-            with suppress(RuntimeError, TypeError):
-                self.action_button.clicked.disconnect(self._action)
-            self._action = None
+        self._action = None
         if action_text and action is not None:
             self.action_button.setText(action_text)
-            self.action_button.clicked.connect(action)
             self._action = action
+            self.action_button.setEnabled(True)
             self.action_button.show()
         else:
             self.action_button.hide()
@@ -153,6 +150,19 @@ class Toast(QFrame):
         self.show()
         self.raise_()
         self._timer.start(duration_ms)
+
+    def _dismiss(self) -> None:
+        self._action = None
+        self.action_button.setEnabled(False)
+        self._timer.stop()
+        self.hide()
+
+    def _invoke_action(self) -> None:
+        # Clear before calling: reentrant/double clicks must not consume older history.
+        action = self._action
+        self._dismiss()
+        if action is not None:
+            action()
 
 
 class ModeCard(QFrame):

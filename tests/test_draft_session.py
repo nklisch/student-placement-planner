@@ -107,8 +107,7 @@ def test_id_only_extra_rows_are_ignored_but_partial_rows_block() -> None:
 
     assert not readiness.ready
     assert any(
-        issue.row_key == ignored_student.key and issue.field == "name"
-        for issue in readiness.issues
+        issue.row_key == ignored_student.key and issue.field == "name" for issue in readiness.issues
     )
     assert any(
         issue.row_key == ignored_location.key and issue.field == "name"

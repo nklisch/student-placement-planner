@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 from types import SimpleNamespace
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import QLabel
 
 from placement_optimizer.application import TravelMode
@@ -20,8 +20,12 @@ from placement_optimizer.ui.mainwindow import MainWindow
 from placement_optimizer.ui.pages import travel as travel_module
 
 
-class _AcceptedReviewDialog:
+class _AcceptedReviewDialog(QObject):
+    addressRepairRequested = Signal(str, str)
+    retryRequested = Signal()
+
     def __init__(self, review, _parent=None) -> None:
+        super().__init__()
         self._review = review
 
     def exec(self) -> bool:
@@ -92,7 +96,10 @@ def _pack():
     return SimpleNamespace(
         compatible=True,
         problem="",
-        manifest=SimpleNamespace(name="Test Region", version="1"),
+        path="/synthetic/test-region/1",
+        manifest=SimpleNamespace(
+            name="Test Region", version="1", addresses=SimpleNamespace(sha256="a" * 64)
+        ),
     )
 
 
@@ -370,3 +377,237 @@ def test_manual_mode_remains_the_ready_path(window, fill_small) -> None:
     readiness = window.controller.session.readiness()
     assert readiness.travel_ready
     assert "Travel times ready" in page.status_label.text()
+
+
+def test_invalid_import_replaces_old_time_and_keeps_valid_progress(window, fill_small) -> None:
+    from placement_optimizer.projects import parse_matrix_csv
+
+    fill_small(window.controller)
+    page = window.pages[3]
+    session = window.controller.session
+    page._import_session = session
+    page._apply_import(
+        parse_matrix_csv(
+            "student_id,location_id,driving_minutes\ns1,l1,ten\ns1,l2,12\nunknown,l1,5"
+        )
+    )
+    assert session.manual_times[("student-a", "location-a")] == "ten"
+    assert session.manual_times[("student-a", "location-b")] == "12"
+    assert not session.readiness().travel_ready
+    assert "not numeric" in page.import_report.text()
+    assert "1 rows have unknown IDs" in page.import_report.text()
+
+
+def test_invalid_distance_and_duplicate_pair_cannot_leave_grid_ready(window, fill_small) -> None:
+    from placement_optimizer.projects import parse_matrix_csv
+
+    fill_small(window.controller)
+    page = window.pages[3]
+    session = window.controller.session
+    page._import_session = session
+    page._apply_import(
+        parse_matrix_csv(
+            "student_id,location_id,driving_minutes,distance_km\n"
+            "s1,l1,10,far\ns1,l2,11,1\ns1,l2,12,2"
+        )
+    )
+    assert "invalid CSV" in session.manual_times[("student-a", "location-a")]
+    assert "duplicate pair" in session.manual_times[("student-a", "location-b")]
+    assert "far" in page.import_report.text()
+    assert not session.readiness().travel_ready
+
+
+def test_export_template_includes_blank_pairs_without_inventing_no_route(
+    window, fill_small, tmp_path, monkeypatch
+) -> None:
+    import csv
+
+    fill_small(window.controller)
+    session = window.controller.session
+    session.manual_times.clear()
+    path = tmp_path / "template.csv"
+    monkeypatch.setattr(window, "ask_save_csv", lambda *args: str(path))
+    window.pages[3].export_csv()
+    with path.open(newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    assert len(rows) == 4
+    assert {row["driving_minutes"] for row in rows} == {""}
+    session.set_manual_time("student-a", "location-a", "5")
+    session.set_manual_time("student-a", "location-b", "x")
+    window.pages[3].export_csv()
+    with path.open(newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    assert [row["driving_minutes"] for row in rows] == ["5", "no route", "", ""]
+
+
+def test_missing_address_preflight_links_to_local_row(window, fill_small) -> None:
+    fill_small(window.controller)
+    page = window.pages[3]
+    page._show_address_preflight(window.controller.session.build_travel_input())
+    requests = []
+    page.addressRepairRequested.connect(lambda kind, item_id: requests.append((kind, item_id)))
+    assert "Bob" in page.address_issues.text()
+    page._repair_address_link("0")
+    assert requests == [("Student", "s2")]
+
+
+def test_retry_reuses_successes_but_not_changed_addresses_or_cleared_overrides(
+    window, fill_small
+) -> None:
+    from dataclasses import replace
+
+    fill_small(window.controller)
+    page = window.pages[3]
+    session = window.controller.session
+    travel_input = session.build_travel_input()
+    review = _review(travel_input)
+    page._review_cache = review
+    page._review_cache_context = page._review_context(TravelMode.GOOGLE)
+    reused = page._reuse_review_matches(travel_input, TravelMode.GOOGLE)
+    assert reused.students[0].coordinate == review.students[0].coordinate
+    session.update_student(0, address="A changed street")
+    changed = page._reuse_review_matches(session.build_travel_input(), TravelMode.GOOGLE)
+    assert changed.students[0].coordinate is None
+    page._review_cache = replace(
+        review,
+        students=(
+            replace(review.students[0], source="Coordinate override", coordinate_override=True),
+            *review.students[1:],
+        ),
+    )
+    cleared = page._reuse_review_matches(travel_input, TravelMode.GOOGLE)
+    assert cleared.students[0].coordinate is None
+
+
+def test_review_cancel_is_neutral_and_keeps_successful_matches(
+    window, qtbot, fill_small, monkeypatch
+) -> None:
+    fill_small(window.controller)
+    page = window.pages[3]
+    page._workflow = _Workflow()
+
+    class CancelledDialog(_AcceptedReviewDialog):
+        def exec(self):
+            return False
+
+    monkeypatch.setattr(travel_module, "AddressReviewDialog", CancelledDialog)
+    page._review_addresses(TravelMode.COMMUNITY)
+    qtbot.waitUntil(lambda: page._provider_worker is None)
+    assert "review cancelled" in page.community_message.text()
+    assert page._review_cache is not None
+    assert window.controller.session.calculated_matrix is None
+
+
+def test_partial_review_retry_only_looks_up_unresolved_addresses(
+    window, qtbot, fill_small, monkeypatch
+) -> None:
+    from placement_optimizer.travel import GeocodingResult, resolve_travel_coordinates
+
+    fill_small(window.controller)
+    session = window.controller.session
+    session.update_student(1, address="Retry street")
+    session.update_location(0, address="Library street")
+    session.update_location(1, address="Workshop street")
+    addresses = []
+
+    class Geocoder:
+        async def geocode(self, address):
+            addresses.append(address)
+            if address == "Retry street" and addresses.count(address) == 1:
+                raise TravelDataError("Temporary failure; retry")
+            return GeocodingResult(Coordinate(51, -1), "Matched " + address)
+
+    class Workflow(_Workflow):
+        async def review_community(self, travel_input):
+            return await resolve_travel_coordinates(
+                travel_input.students, travel_input.locations, Geocoder()
+            )
+
+    class RetryDialog(_AcceptedReviewDialog):
+        attempts = 0
+
+        def exec(self):
+            type(self).attempts += 1
+            if self.attempts == 1:
+                assert self._review.students[0].coordinate is not None
+                assert self._review.students[1].coordinate is None
+                assert "Temporary failure" in self._review.students[1].error
+                self.retryRequested.emit()
+                return False
+            assert all(place.coordinate is not None for place in self._review.students)
+            assert "Retained address match" in self._review.students[0].source
+            return True
+
+    page = window.pages[3]
+    page._workflow = Workflow()
+    monkeypatch.setattr(travel_module, "AddressReviewDialog", RetryDialog)
+    page._review_addresses(TravelMode.COMMUNITY)
+    qtbot.waitUntil(lambda: session.calculated_matrix is not None, timeout=5000)
+    qtbot.waitUntil(lambda: page._provider_worker is None, timeout=5000)
+    assert addresses == [
+        "1 Main Street",
+        "Retry street",
+        "Library street",
+        "Workshop street",
+        "Retry street",
+    ]
+    assert RetryDialog.attempts == 2
+
+
+def test_roster_names_refresh_travel_headers_without_resetting_selection(
+    window, fill_small
+) -> None:
+    fill_small(window.controller)
+    page = window.pages[3]
+    session = window.controller.session
+    version = session.travel_input_version
+    selected = page.model.index(1, 1)
+    page.table.setCurrentIndex(selected)
+    headers = []
+    resets = []
+    page.model.headerDataChanged.connect(lambda *args: headers.append(args))
+    page.model.modelReset.connect(lambda: resets.append(True))
+
+    session.update_student(0, name="Renamed student")
+    session.update_location(1, name="Renamed location")
+    window.controller.notify()
+
+    assert session.travel_input_version == version
+    assert page.model.headerData(0, Qt.Orientation.Vertical) == "Renamed student"
+    assert page.model.headerData(1, Qt.Orientation.Horizontal) == "Renamed location"
+    assert {change[0] for change in headers} == {Qt.Orientation.Vertical, Qt.Orientation.Horizontal}
+    assert not resets
+    assert page.table.currentIndex() == selected
+
+    headers.clear()
+    page.model.setData(selected, "14")
+    session.update_location(0, capacity="5")
+    window.controller.notify()
+    assert not headers
+    assert not resets
+    assert page.table.currentIndex() == selected
+
+
+def test_review_rechecks_roster_after_modal_dialog(window, qtbot, fill_small, monkeypatch):
+    from placement_optimizer.application import StudentDraft
+
+    fill_small(window.controller)
+    session = window.controller.session
+    page = window.pages[3]
+    workflow = _Workflow()
+    page._workflow = workflow
+
+    class ChangedDuringReview(_AcceptedReviewDialog):
+        def exec(self):
+            # Models an import completion processed by the modal event loop.
+            session.add_student(StudentDraft("late", name="Later import", id="s3"))
+            return True
+
+    monkeypatch.setattr(travel_module, "AddressReviewDialog", ChangedDuringReview)
+    page.online_card.select()
+    page.google_key.setText("test-key")
+    page._review_addresses(TravelMode.GOOGLE)
+    qtbot.waitUntil(lambda: page._provider_worker is None, timeout=5000)
+    assert workflow.calls == ["review-google"]
+    assert "changed during review" in page.google_message.text()
+    assert session.calculated_matrix is None

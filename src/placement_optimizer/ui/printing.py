@@ -36,6 +36,8 @@ def build_results_print_html(
     outcome: SolveProjectOutcome,
     project: PlacementProject,
     options: PrintOptions,
+    *,
+    previous_result: bool = False,
 ) -> str:
     """Build the printable document independently of printer/UI state."""
 
@@ -66,6 +68,12 @@ def build_results_print_html(
         )
 
     message = f"<p class='summary'>{escape(outcome.message)}</p>" if outcome.message else ""
+    warning = (
+        "<p><strong>Previous placements — these placements predate your latest changes. "
+        "They may not satisfy the current roster, capacities, or rules.</strong></p>"
+        if previous_result
+        else ""
+    )
     return (
         "<!doctype html><html><head><meta charset='utf-8'><style>"
         "body { color: #23251f; font-family: sans-serif; font-size: 10pt; }"
@@ -77,7 +85,7 @@ def build_results_print_html(
         "td { border-bottom: 1px solid #dedcd6; padding: 5px 7px; }"
         ".number { text-align: right; white-space: nowrap; }"
         "</style></head><body>"
-        f"<h1>{escape(project.name)} — Placements</h1>{message}{content}"
+        f"<h1>{escape(project.name)} — Placements</h1>{warning}{message}{content}"
         "</body></html>"
     )
 
@@ -191,9 +199,8 @@ def _placement_section(
         rows.append(_table_row(values, numeric_from=1))
     if not rows:
         rows.append(f"<tr><td colspan='{len(headers)}' class='muted'>No students</td></tr>")
-    return (
-        f"<h2>{escape(heading)} <span class='muted'>— {escape(count)}</span></h2>"
-        + _table(headers, rows, numeric_from=1)
+    return f"<h2>{escape(heading)} <span class='muted'>— {escape(count)}</span></h2>" + _table(
+        headers, rows, numeric_from=1
     )
 
 
@@ -236,10 +243,13 @@ class ResultsPrintPreviewDialog(QDialog):
         outcome: SolveProjectOutcome,
         project: PlacementProject,
         parent: QWidget | None = None,
+        *,
+        previous_result: bool = False,
     ) -> None:
         super().__init__(parent)
         from PySide6.QtPrintSupport import QPrinter, QPrintPreviewWidget
 
+        self._previous_result = previous_result
         self._outcome = outcome
         self._project = project
         self._printer = QPrinter(QPrinter.PrinterMode.HighResolution)
@@ -303,7 +313,12 @@ class ResultsPrintPreviewDialog(QDialog):
 
         document = QTextDocument()
         document.setHtml(
-            build_results_print_html(self._outcome, self._project, self.print_options())
+            build_results_print_html(
+                self._outcome,
+                self._project,
+                self.print_options(),
+                previous_result=self._previous_result,
+            )
         )
         return document
 

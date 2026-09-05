@@ -215,3 +215,28 @@ These are user-experience targets, not premature microbenchmarks:
 - Heavy audit/provenance workflows.
 - Speculative operating-system/filesystem hardening.
 - Scale beyond the supported school-sized workflow until measured demand exists.
+
+## Audit-remediation release — 0.1.0b5
+
+User-authorized scope: resolve all 17 findings in `docs/AUDIT.md`, integrate regression
+coverage and practical user documentation, conduct one final Astra high review,
+adjudicate it, and publish the next beta only after verification.
+
+Implementation decisions:
+
+- One chronological data-edit Undo/Redo history replaces independent page histories
+  over whole-project snapshots; related row/rule/time cleanup remains atomic.
+- Draft rows retain their last unambiguous rule-reference ID through invalid ID edits
+  and project saving. ID swaps rewrite references as one mapping rather than sequentially.
+- Calculated travel snapshots participate in data Undo. Name/capacity-only edits do not
+  invalidate road inputs; actual route input changes still do.
+- CSV import preserves invalid replacement text, accepts displayed field names, and
+  creates missing IDs without silently discarding fields. Review and sharing states
+  explicitly distinguish unresolved input, failed calculation, and previous results.
+
+Gates:
+
+- [x] F-01–F-17 implemented and covered by focused verification.
+- [x] Full tests, lint/format checks, and combined-rule oracle pass (249 tests; 300 oracle cases).
+- [x] Final Astra high review adjudicated; all four accepted findings repaired and verified.
+- [ ] Windows/macOS release builds and packaged smoke tests pass; beta published.

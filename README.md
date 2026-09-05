@@ -16,7 +16,16 @@ It is designed as a calm, spreadsheet-friendly tool for school staff:
 
 The Windows x64 and Apple-Silicon macOS beta is available in [v0.1.0b4](https://github.com/nklisch/student-placement-planner/releases/tag/v0.1.0b4). Both downloads are self-contained; end users do not need Python or a terminal.
 
-Manual entry, no-key community routing, openrouteservice, Google Maps, and offline-region workflows are implemented and tested. Offline regions are downloaded directly from Geofabrik and prepared inside the app, without project-hosted map files. Preview signatures can produce a one-time operating-system warning; the release includes checksums and GitHub build attestations.
+Manual entry, no-key community routing, openrouteservice, Google Maps, and offline-region workflows are implemented and tested. Offline regions are downloaded directly from Geofabrik and prepared inside the app, without project-hosted map files. Preview signatures can produce operating-system warnings; some school-managed computers may block installation. Follow the [Windows/macOS installation guide](docs/INSTALLATION.md), including source checks and when to ask school IT. The release includes checksums and GitHub build attestations.
+
+## Get started
+
+1. [Install the app](docs/INSTALLATION.md), then choose **File → Load sample data**. No internet or account is needed for the sample.
+2. Choose **Find placements**, then try **Choices first** to compare priorities. Ranked choices are preferences, not required placements.
+3. Follow the [user guide](docs/USER_GUIDE.md) to enter your own roster, provide driving times, repair inputs, and share results. It includes downloadable [student](docs/examples/students.csv), [location](docs/examples/locations.csv), and [travel-time](docs/examples/travel-times.csv) CSV examples.
+4. Use **File → Save** to keep an editable `.spp` project. There is no automatic roster save. A result CSV or printout is for sharing, not for restoring your project.
+
+The same essentials are available inside the app under **Help → User guide…** and **Guided walkthrough…**.
 
 ## Developer setup
 

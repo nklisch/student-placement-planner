@@ -336,11 +336,16 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           cat > release-notes.md <<'EOF'
-          Beta 4 replaces the generic example with verified northern Colorado care facilities: four Cottonwood locations, Good Samaritan Fort Collins and Loveland, and North Shore Loveland. Sample people are now unmistakably fictional, and the bundled coordinates and road times match the example addresses.
+          Beta 5 fixes input-recovery and usability problems identified in the application audit.
 
-          This beta also includes placement-result print preview, visible student/location removal with Undo, ignored untouched extra rows, clearer offline-region feedback, and safe progress reporting for map downloads larger than 2 GB.
+          - One chronological Undo/Redo history protects work across students, locations, rules, and driving times.
+          - CSV import accepts the displayed headings, creates missing IDs, preserves invalid replacement values for repair, and warns about ignored fields. Driving-time exports now include blank pairs as a fill-in template.
+          - Identifier repairs preserve rule ownership. Address changes explicitly choose between the new address and an existing coordinate override; unresolved address matches remain repairable without losing successful matches.
+          - Previous-result sharing requires confirmation and printed output is labeled. Failed calculations no longer show success statistics or export empty placement lists.
+          - Rule dialogs, paste overflow, dark-mode contrast, and actionable error feedback are improved.
+          - New installation and user guides include CSV examples, saving/reopening projects, and explanations of goals and strict rules.
 
-          Windows and macOS builds use preview signatures unless their attached `SIGNING` files say otherwise. Checksums and GitHub build attestations are included with the release.
+          Windows and macOS builds use preview signatures unless their attached `SIGNING` files say otherwise. Checksums and GitHub build attestations are included. School-managed devices may require IT approval; see the installation guide rather than disabling operating-system protections.
           EOF
           gh release create "$TAG" release-artifacts/* \
             --repo "$GITHUB_REPOSITORY" \

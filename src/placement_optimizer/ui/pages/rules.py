@@ -22,7 +22,7 @@ from placement_optimizer.optimization import (
     GroupRule,
     StudentLocationPair,
 )
-from placement_optimizer.ui.controller import SessionController, SnapshotUndo
+from placement_optimizer.ui.controller import SessionController
 from placement_optimizer.ui.help_content import RULE_ACTION_HELP
 from placement_optimizer.ui.pages.ruledialogs import (
     AllowedLocationsDialog,
@@ -78,7 +78,7 @@ class RulesPage(QWidget):
         super().__init__()
         self._controller = controller
         self._host = host
-        self.undo = SnapshotUndo(self._capture_rules, self._restore_rules, self)
+        self.undo = controller.undo
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 12)
@@ -132,23 +132,16 @@ class RulesPage(QWidget):
     def _session(self):
         return self._controller.session
 
-    def _capture_rules(self) -> AssignmentRules:
-        return self._session.rules
-
-    def _restore_rules(self, rules: AssignmentRules) -> None:
-        self._session.set_rules(rules)
-        self._controller.notify()
-
     def _roster(self) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
         students = [
             (row.id.strip(), row.name.strip())
             for row in self._session.students
-            if row.id.strip() and row.name.strip()
+            if row.id.strip() and not row.is_placeholder
         ]
         locations = [
             (row.id.strip(), row.name.strip())
             for row in self._session.locations
-            if row.id.strip() and row.name.strip()
+            if row.id.strip() and not row.is_placeholder
         ]
         return students, locations
 
@@ -166,6 +159,9 @@ class RulesPage(QWidget):
         )
 
     def _apply_rules(self, rules: AssignmentRules, toast: str = "") -> None:
+        if rules == self._session.rules:
+            return
+        self.undo.record()
         self._session.set_rules(rules)
         self._controller.notify()
         if toast:
@@ -243,7 +239,12 @@ class RulesPage(QWidget):
         if rules.maximum_commute_seconds is not None:
             cards.append(
                 RuleCard(
-                    f"Nobody drives more than {_minutes(rules.maximum_commute_seconds)} minutes.",
+                    f"Nobody drives more than {_minutes(rules.maximum_commute_seconds)} minutes."
+                    + (
+                        " Individual student limits override this."
+                        if rules.student_commute_limits
+                        else ""
+                    ),
                     self.add_commute_limit,
                     lambda: self._delete_commute(global_only=True),
                 )
@@ -261,19 +262,45 @@ class RulesPage(QWidget):
             allowed = _names(entry.location_ids, location_names)
             cards.append(
                 RuleCard(
-                    f"{student_names.get(entry.student_id, entry.student_id)} can only go to "
-                    f"{allowed}.",
+                    (
+                        f"{student_names.get(entry.student_id, entry.student_id)} "
+                        f"can only go to {allowed}."
+                        if entry.location_ids
+                        else "No locations allowed — "
+                        f"{student_names.get(entry.student_id, entry.student_id)} "
+                        "cannot be placed."
+                    ),
                     self.add_allowed_locations,
                     lambda i=index: self._delete_entry("eligible_locations", i),
                 )
             )
 
+        ids_valid = self._ids_valid()
+        self.add_button.setEnabled(ids_valid)
+        self.add_button.setToolTip(
+            "Add a requirement or a student's ranked choices."
+            if ids_valid
+            else "Give every student and location a unique, non-empty ID before editing rules."
+        )
         for card in cards:
+            card.setEnabled(ids_valid)
             self.cards_layout.insertWidget(self.cards_layout.count() - 1, card)
 
     # --- add / edit actions -------------------------------------------------------
 
+    def _ids_valid(self) -> bool:
+        for rows in (self._session.students, self._session.locations):
+            ids = [row.id.strip() for row in rows if not row.is_placeholder]
+            if any(not value for value in ids) or len(ids) != len(set(ids)):
+                return False
+        return True
+
     def _require_roster(self, need_locations: bool = True) -> bool:
+        if not self._ids_valid():
+            self._host.show_toast(
+                "Give every student and location a unique ID before editing rules."
+            )
+            return False
         students, locations = self._roster()
         if not students or (need_locations and not locations):
             self._host.show_toast("Add students and locations before creating rules.")
@@ -386,7 +413,7 @@ class RulesPage(QWidget):
         del entries[index]
         self._session.set_rules(replace(self._session.rules, **{attr: tuple(entries)}))
         self._controller.notify()
-        self._host.show_toast("Rule deleted.", "Undo", self.undo.undo)
+        self._host.show_toast("Rule deleted.", "Undo", self.undo.bound_undo())
 
     def _delete_commute(self, *, global_only: bool = False, student_index: int = -1) -> None:
         self.undo.record()
@@ -398,8 +425,7 @@ class RulesPage(QWidget):
             del limits[student_index]
             self._session.set_rules(replace(rules, student_commute_limits=tuple(limits)))
         self._controller.notify()
-        self._host.show_toast("Rule deleted.", "Undo", self.undo.undo)
+        self._host.show_toast("Rule deleted.", "Undo", self.undo.bound_undo())
 
     def _on_session_replaced(self) -> None:
-        self.undo.clear()
         self.refresh_page()

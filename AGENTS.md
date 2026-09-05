@@ -12,5 +12,5 @@ In particular:
 
 - This is a small, local desktop utility whose priorities are useful results, mathematical correctness, smooth operation, and a pleasant interface.
 - Do not add speculative file, operating-system, or startup security guards that can prevent legitimate installations from running. Follow the concrete threat-model rule in `docs/BUILD_INSTRUCTIONS.md`.
-- The parent agent owns all backend, optimization, routing, persistence, packaging, and integration logic.
-- Follow the model role restrictions and sparse review schedule in `docs/BUILD_INSTRUCTIONS.md`; do not repurpose UI-design agents for backend work.
+- The parent agent owns architecture, integration, adjudication, and release; bounded implementation may be delegated under the current model agreement in `docs/BUILD_INSTRUCTIONS.md`.
+- Follow that document's current model responsibilities and sparse final-review schedule.

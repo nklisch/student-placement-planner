@@ -4,14 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QDialogButtonBox,
+    QHBoxLayout,
     QHeaderView,
     QLabel,
+    QPushButton,
     QTableView,
     QVBoxLayout,
     QWidget,
@@ -21,13 +23,14 @@ from placement_optimizer.domain import Coordinate
 from placement_optimizer.travel import ResolvedPlace, TravelCoordinateReview
 from placement_optimizer.ui.theme import tokens_for
 
-_HEADERS = ("Type", "Name", "Entered", "Matched", "Coordinates")
+_HEADERS = ("Type", "Name", "Entered", "Matched / issue", "Coordinates", "Source")
 _HEADER_HELP = (
     "Whether this row is a student starting point or a placement location.",
     "The name kept on this computer. It was not sent to the map provider.",
     "The address entered in the project.",
     "The address found by the selected map option.",
     "Latitude and longitude used to calculate driving times. Double-click to correct them.",
+    "Coordinates control the route. A coordinate override does not look up the entered address.",
 )
 
 
@@ -36,6 +39,20 @@ class _ReviewRow:
     kind: str
     value: ResolvedPlace
     coordinates: str
+
+    @property
+    def coordinate(self) -> Coordinate | None:
+        if _coordinate_issue(self.coordinates):
+            return None
+        # Display rounding is not a user correction. Preserve full provider
+        # precision unless the editable text actually changes.
+        if self.coordinates == _format_coordinate(self.value.coordinate):
+            return self.value.coordinate
+        return _parse_coordinate(self.coordinates)
+
+    @property
+    def is_correction(self) -> bool:
+        return self.coordinate is not None and self.coordinate != self.value.coordinate
 
 
 class AddressReviewModel(QAbstractTableModel):
@@ -76,8 +93,15 @@ class AddressReviewModel(QAbstractTableModel):
             row.kind,
             row.value.name,
             row.value.entered_address or "Coordinates provided",
-            row.value.matched_address,
+            "Coordinates corrected"
+            if row.is_correction
+            else row.value.error or row.value.matched_address,
             row.coordinates,
+            (
+                "Coordinate correction — overrides address"
+                if row.is_correction
+                else row.value.source
+            ),
         )
         if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
             return values[index.column()]
@@ -94,7 +118,7 @@ class AddressReviewModel(QAbstractTableModel):
         if role != Qt.ItemDataRole.EditRole or index.column() != 4:
             return False
         self.rows[index.row()].coordinates = str(value).strip()
-        self.dataChanged.emit(index, index)
+        self.dataChanged.emit(self.index(index.row(), 3), self.index(index.row(), 5))
         return True
 
     def is_valid(self) -> bool:
@@ -103,8 +127,8 @@ class AddressReviewModel(QAbstractTableModel):
     def corrections(self) -> tuple[tuple[str, str, Coordinate], ...]:
         result = []
         for row in self.rows:
-            coordinate = _parse_coordinate(row.coordinates)
-            if coordinate != row.value.coordinate:
+            coordinate = row.coordinate
+            if coordinate is not None and row.is_correction:
                 result.append((row.kind, row.value.item_id, coordinate))
         return tuple(result)
 
@@ -115,7 +139,16 @@ class AddressReviewModel(QAbstractTableModel):
                 row.value.name,
                 row.value.entered_address,
                 row.value.matched_address,
-                _parse_coordinate(row.coordinates),
+                row.coordinate,
+                (row.value.error or _coordinate_issue(row.coordinates))
+                if _coordinate_issue(row.coordinates)
+                else "",
+                (
+                    "Coordinate correction — overrides address"
+                    if row.is_correction
+                    else row.value.source
+                ),
+                coordinate_override=row.value.coordinate_override or row.is_correction,
             )
             for row in self.rows
         ]
@@ -126,6 +159,9 @@ class AddressReviewModel(QAbstractTableModel):
 
 
 class AddressReviewDialog(QDialog):
+    addressRepairRequested = Signal(str, str)
+    retryRequested = Signal()
+
     def __init__(
         self,
         review: TravelCoordinateReview,
@@ -139,7 +175,8 @@ class AddressReviewDialog(QDialog):
         layout.setSpacing(10)
         intro = QLabel(
             "Check the matches before calculating driving times. Names stay on this computer. "
-            "Double-click Coordinates to correct a match."
+            "Coordinates control the route, even when an address is shown. "
+            "Double-click Coordinates to correct a match, or edit the selected address and retry."
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -157,6 +194,21 @@ class AddressReviewDialog(QDialog):
         self.table.setColumnWidth(4, 170)
         self.table.setAccessibleName("Address matches")
         layout.addWidget(self.table, stretch=1)
+        actions = QHBoxLayout()
+        repair = QPushButton("Edit selected address")
+        repair.clicked.connect(self._repair_selected)
+        retry = QPushButton("Retry unresolved addresses")
+        retry.clicked.connect(self._retry)
+        actions.addWidget(repair)
+        actions.addWidget(retry)
+        actions.addStretch(1)
+        layout.addLayout(actions)
+        unresolved = next(
+            (index for index, row in enumerate(self.model.rows) if row.value.coordinate is None),
+            0,
+        )
+        if self.model.rows:
+            self.table.setCurrentIndex(self.model.index(unresolved, 4))
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -166,6 +218,17 @@ class AddressReviewDialog(QDialog):
         layout.addWidget(self.buttons)
         self.model.dataChanged.connect(lambda *_args: self._update_ok())
         self._update_ok()
+
+    def _repair_selected(self) -> None:
+        index = self.table.currentIndex()
+        if index.isValid():
+            row = self.model.rows[index.row()]
+            self.addressRepairRequested.emit(row.kind, row.value.item_id)
+            self.reject()
+
+    def _retry(self) -> None:
+        self.retryRequested.emit()
+        self.reject()
 
     def _update_ok(self) -> None:
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(self.model.is_valid())
@@ -190,5 +253,5 @@ def _coordinate_issue(value: str) -> str:
     return ""
 
 
-def _format_coordinate(value: Coordinate) -> str:
-    return f"{value.latitude:.7f}, {value.longitude:.7f}"
+def _format_coordinate(value: Coordinate | None) -> str:
+    return "" if value is None else f"{value.latitude:.7f}, {value.longitude:.7f}"

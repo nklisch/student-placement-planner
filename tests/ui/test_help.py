@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 
+from placement_optimizer.projects.csv_io import (
+    parse_locations_csv,
+    parse_matrix_csv,
+    parse_students_csv,
+)
 from placement_optimizer.ui.help_content import HELP_TOPICS, WALKTHROUGH_STEPS
 from placement_optimizer.ui.helpdialogs import GuidedWalkthroughDialog, HelpCenterDialog
 
@@ -81,3 +88,45 @@ def test_rule_actions_and_footer_have_practical_tooltips(window) -> None:
     assert all(action.toolTip() for action in actions)
     assert "required inputs" in window.readiness_button.toolTip()
     assert "longest drive" in window.goal_combo.toolTip()
+
+
+def test_help_explains_reusable_work_and_import_semantics() -> None:
+    topics = {topic.title: topic for topic in HELP_TOPICS}
+    save = topics["Save, open, and share"]
+    save_text = save.introduction + " ".join(entry.body for entry in save.entries)
+    assert "no automatic roster save" in save_text
+    assert ".spp" in save_text
+    assert "File → Open" in save_text
+    assert "Neither restores your editable project" in save_text
+
+    imports = topics["CSV imports"]
+    assert "append" in imports.introduction
+    text = " ".join(entry.body for entry in imports.entries)
+    assert "Name,ID,Capacity,Minimum,Address,Coordinates" in text
+    assert "student_id,location_id,driving_minutes,distance_km" in text
+    assert "including blanks" in text
+
+
+def test_help_distinguishes_preferences_limits_and_global_undo() -> None:
+    text = " ".join(entry.body for topic in HELP_TOPICS for entry in topic.entries)
+    assert "individual limit overrides the general limit" in text
+    assert "it does not forbid them" in text
+    assert "Choices first minimizes the sum" in text
+    assert "even on another page" in text
+    assert "Coordinates take precedence" in text
+
+
+def test_downloadable_csv_examples_are_complete_and_match() -> None:
+    examples = Path(__file__).resolve().parents[2] / "docs" / "examples"
+    students = parse_students_csv((examples / "students.csv").read_text())
+    locations = parse_locations_csv((examples / "locations.csv").read_text())
+    travel = parse_matrix_csv((examples / "travel-times.csv").read_text())
+    assert not students.issues
+    assert not locations.issues
+    assert not travel.issues
+    assert len(students.items) == len(locations.items) == 2
+    assert sum(location.capacity for location in locations.items) == len(students.items)
+    assert {(entry.student_id, entry.location_id) for entry in travel.items} == {
+        (student.id, location.id) for student in students.items for location in locations.items
+    }
+    assert all(entry.duration_seconds is not None for entry in travel.items)

@@ -41,6 +41,8 @@ class StudentDraft:
     address: str = ""
     coordinates: str = ""
     is_placeholder: bool = False
+    # Last unambiguous rule identity; retained while the visible ID is being repaired.
+    reference_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +55,8 @@ class LocationDraft:
     address: str = ""
     coordinates: str = ""
     is_placeholder: bool = False
+    # Last unambiguous rule identity; retained while the visible ID is being repaired.
+    reference_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +90,8 @@ class DraftGridSnapshot:
     rules: AssignmentRules
     manual_times: tuple[tuple[tuple[str, str], str], ...]
     manual_distances_meters: tuple[tuple[tuple[str, str], int], ...]
+    calculated_matrix: TravelMatrix | None
+    calculated_travel_is_stale: bool
 
 
 class DraftSession:
@@ -130,8 +136,14 @@ class DraftSession:
         calculated_travel_is_stale: bool = False,
     ) -> DraftSession:
         session = cls(name)
-        session.students[:] = students
-        session.locations[:] = locations
+        session.students[:] = [
+            replace(row, reference_id=row.id.strip()) if row.reference_id is None else row
+            for row in students
+        ]
+        session.locations[:] = [
+            replace(row, reference_id=row.id.strip()) if row.reference_id is None else row
+            for row in locations
+        ]
         session.rules = rules
         session.optimization = optimization
         session.travel_mode = travel_mode
@@ -158,6 +170,7 @@ class DraftSession:
                 StudentDraft(
                     key=session._student_key(),
                     id=student.id,
+                    reference_id=student.id,
                     name=student.name,
                     address=student.address or "",
                     coordinates=_format_coordinate(student.coordinate),
@@ -168,6 +181,7 @@ class DraftSession:
                 LocationDraft(
                     key=session._location_key(),
                     id=location.id,
+                    reference_id=location.id,
                     name=location.name,
                     capacity=str(location.capacity),
                     minimum_capacity=(
@@ -242,28 +256,45 @@ class DraftSession:
         )
         if any(student.key == item.key for student in self.students):
             item = replace(item, key=self._student_key())
+        if item.is_placeholder:
+            item = replace(item, reference_id="")
+        elif item.reference_id is None:
+            used = {row.reference_id for row in self.students}
+            item = replace(
+                item, reference_id=item.id.strip() if item.id.strip() not in used else ""
+            )
         self.students.append(item)
         affects_project = not _student_row_is_empty(item)
         self._bump(model=affects_project, travel=affects_project)
         return item
 
-    def update_student(self, index: int, **changes: str) -> StudentDraft:
+    def update_student(
+        self, index: int, *, keep_coordinates: bool = False, **changes: str
+    ) -> StudentDraft:
         original = self.students[index]
+        if (
+            "address" in changes
+            and changes["address"] != original.address
+            and "coordinates" not in changes
+            and not keep_coordinates
+        ):
+            changes["coordinates"] = ""
         started = not original.is_placeholder or any(value.strip() for value in changes.values())
         updated = replace(original, is_placeholder=not started, **changes)
         self.students[index] = updated
-        if original.id != updated.id:
-            self.rules = _rename_student(self.rules, original.id, updated.id)
+        self._reconcile_references(students=True)
         affects_project = not _student_row_is_empty(original) or not _student_row_is_empty(updated)
-        self._bump(model=affects_project, travel=affects_project)
-        return updated
+        self._bump(
+            model=affects_project, travel=_travel_identity(original) != _travel_identity(updated)
+        )
+        return self.students[index]
 
     def remove_students(self, indexes: list[int]) -> None:
         index_set = {index for index in indexes if 0 <= index < len(self.students)}
         if not index_set:
             return
         removed_rows = [self.students[index] for index in sorted(index_set)]
-        removed = {row.id for row in removed_rows}
+        removed = {row.reference_id or "" for row in removed_rows}
         removed_keys = {row.key for row in removed_rows}
         self.students[:] = [
             student for index, student in enumerate(self.students) if index not in index_set
@@ -278,6 +309,7 @@ class DraftSession:
         }
         rules_before = self.rules
         self.rules = _without_students(self.rules, removed)
+        self._reconcile_references(students=True)
         affects_project = rules_before != self.rules or any(
             not _student_row_is_empty(row) for row in removed_rows
         )
@@ -291,30 +323,67 @@ class DraftSession:
         )
         if any(location.key == item.key for location in self.locations):
             item = replace(item, key=self._location_key())
+        if item.is_placeholder:
+            item = replace(item, reference_id="")
+        elif item.reference_id is None:
+            used = {row.reference_id for row in self.locations}
+            item = replace(
+                item, reference_id=item.id.strip() if item.id.strip() not in used else ""
+            )
         self.locations.append(item)
         affects_project = not _location_row_is_empty(item)
         self._bump(model=affects_project, travel=affects_project)
         return item
 
-    def update_location(self, index: int, **changes: str) -> LocationDraft:
+    def update_location(
+        self, index: int, *, keep_coordinates: bool = False, **changes: str
+    ) -> LocationDraft:
         original = self.locations[index]
+        if (
+            "address" in changes
+            and changes["address"] != original.address
+            and "coordinates" not in changes
+            and not keep_coordinates
+        ):
+            changes["coordinates"] = ""
         started = not original.is_placeholder or any(value.strip() for value in changes.values())
         updated = replace(original, is_placeholder=not started, **changes)
         self.locations[index] = updated
-        if original.id != updated.id:
-            self.rules = _rename_location(self.rules, original.id, updated.id)
+        self._reconcile_references(students=False)
         affects_project = not _location_row_is_empty(original) or not _location_row_is_empty(
             updated
         )
-        self._bump(model=affects_project, travel=affects_project)
-        return updated
+        self._bump(
+            model=affects_project, travel=_travel_identity(original) != _travel_identity(updated)
+        )
+        return self.locations[index]
+
+    def _reconcile_references(self, *, students: bool) -> None:
+        """Rename rule IDs atomically only after the edited identifiers are unambiguous.
+
+        A row remembers its last rule identity through invalid edits and save/open.
+        Sequential renaming would merge two students' rules during an ID swap.
+        """
+        rows = self.active_students if students else self.active_locations
+        identifiers = [row.id.strip() for row in rows]
+        if any(not value for value in identifiers) or len(set(identifiers)) != len(identifiers):
+            return
+        mapping = {row.reference_id: row.id.strip() for row in rows if row.reference_id}
+        self.rules = _map_rule_ids(
+            self.rules, mapping if students else {}, {} if students else mapping
+        )
+        target = self.students if students else self.locations
+        keys = {row.key for row in rows}
+        target[:] = [
+            replace(row, reference_id=row.id.strip()) if row.key in keys else row for row in target
+        ]
 
     def remove_locations(self, indexes: list[int]) -> None:
         index_set = {index for index in indexes if 0 <= index < len(self.locations)}
         if not index_set:
             return
         removed_rows = [self.locations[index] for index in sorted(index_set)]
-        removed = {row.id for row in removed_rows}
+        removed = {row.reference_id or "" for row in removed_rows}
         removed_keys = {row.key for row in removed_rows}
         self.locations[:] = [
             location for index, location in enumerate(self.locations) if index not in index_set
@@ -329,6 +398,7 @@ class DraftSession:
         }
         rules_before = self.rules
         self.rules = _without_locations(self.rules, removed)
+        self._reconcile_references(students=False)
         affects_project = rules_before != self.rules or any(
             not _location_row_is_empty(row) for row in removed_rows
         )
@@ -387,6 +457,8 @@ class DraftSession:
             rules=self.rules,
             manual_times=tuple(self.manual_times.items()),
             manual_distances_meters=tuple(self.manual_distances_meters.items()),
+            calculated_matrix=self.calculated_matrix,
+            calculated_travel_is_stale=self.calculated_travel_is_stale,
         )
 
     def restore_grid_snapshot(self, snapshot: DraftGridSnapshot) -> None:
@@ -402,6 +474,7 @@ class DraftSession:
         self.rules = snapshot.rules
         self.manual_times = dict(snapshot.manual_times)
         self.manual_distances_meters = dict(snapshot.manual_distances_meters)
+        self.calculated_matrix = snapshot.calculated_matrix
         current_roster = (self.active_students, self.active_locations)
         current_model = (
             current_roster,
@@ -411,7 +484,11 @@ class DraftSession:
         )
         self._bump(
             model=previous_model != current_model,
-            travel=previous_roster != current_roster,
+            travel=tuple(tuple(_travel_identity(row) for row in rows) for rows in previous_roster)
+            != tuple(tuple(_travel_identity(row) for row in rows) for rows in current_roster),
+        )
+        self._calculated_travel_version = (
+            -1 if snapshot.calculated_travel_is_stale else self.travel_input_version
         )
 
     def set_calculated_matrix(self, matrix: TravelMatrix) -> None:
@@ -771,54 +848,6 @@ def _format_coordinate(coordinate: Coordinate | None) -> str:
     return f"{coordinate.latitude:g}, {coordinate.longitude:g}"
 
 
-def _rename_student(rules: AssignmentRules, old: str, new: str) -> AssignmentRules:
-    return replace(
-        rules,
-        eligible_locations=_rename_preferences(rules.eligible_locations, old, new),
-        preferences=_rename_preferences(rules.preferences, old, new),
-        pinned=_rename_pair_students(rules.pinned, old, new),
-        prohibited=_rename_pair_students(rules.prohibited, old, new),
-        together=_rename_group_students(rules.together, old, new),
-        separate=_rename_group_students(rules.separate, old, new),
-        student_commute_limits=tuple(
-            (new if student_id == old else student_id, limit)
-            for student_id, limit in rules.student_commute_limits
-        ),
-        prior_assignments=_rename_pair_students(rules.prior_assignments, old, new),
-    )
-
-
-def _rename_location(rules: AssignmentRules, old: str, new: str) -> AssignmentRules:
-    def preferences(values: tuple[Preference, ...]) -> tuple[Preference, ...]:
-        return tuple(
-            Preference(
-                value.student_id,
-                tuple(
-                    new if location_id == old else location_id for location_id in value.location_ids
-                ),
-            )
-            for value in values
-        )
-
-    def pairs(values: tuple[StudentLocationPair, ...]) -> tuple[StudentLocationPair, ...]:
-        return tuple(
-            StudentLocationPair(
-                value.student_id,
-                new if value.location_id == old else value.location_id,
-            )
-            for value in values
-        )
-
-    return replace(
-        rules,
-        eligible_locations=preferences(rules.eligible_locations),
-        preferences=preferences(rules.preferences),
-        pinned=pairs(rules.pinned),
-        prohibited=pairs(rules.prohibited),
-        prior_assignments=pairs(rules.prior_assignments),
-    )
-
-
 def _without_students(rules: AssignmentRules, removed: set[str]) -> AssignmentRules:
     def preferences(values: tuple[Preference, ...]) -> tuple[Preference, ...]:
         return tuple(value for value in values if value.student_id not in removed)
@@ -880,33 +909,49 @@ def _without_locations(rules: AssignmentRules, removed: set[str]) -> AssignmentR
     )
 
 
-def _rename_preferences(
-    values: tuple[Preference, ...], old: str, new: str
-) -> tuple[Preference, ...]:
-    return tuple(
-        Preference(new if value.student_id == old else value.student_id, value.location_ids)
-        for value in values
-    )
+def _travel_identity(row: StudentDraft | LocationDraft) -> tuple[str, str, str, str] | None:
+    if row.is_placeholder:
+        return None
+    return row.key, row.id.strip(), row.address.strip(), row.coordinates.strip()
 
 
-def _rename_pair_students(
-    values: tuple[StudentLocationPair, ...], old: str, new: str
-) -> tuple[StudentLocationPair, ...]:
-    return tuple(
-        StudentLocationPair(
-            new if value.student_id == old else value.student_id,
-            value.location_id,
+def _map_rule_ids(
+    rules: AssignmentRules, students: dict[str, str], locations: dict[str, str]
+) -> AssignmentRules:
+    def preferences(values: tuple[Preference, ...]) -> tuple[Preference, ...]:
+        return tuple(
+            Preference(
+                students.get(value.student_id, value.student_id),
+                tuple(locations.get(item, item) for item in value.location_ids),
+            )
+            for value in values
         )
-        for value in values
-    )
 
-
-def _rename_group_students(
-    values: tuple[GroupRule, ...], old: str, new: str
-) -> tuple[GroupRule, ...]:
-    return tuple(
-        GroupRule(
-            tuple(new if student_id == old else student_id for student_id in value.student_ids)
+    def pairs(values: tuple[StudentLocationPair, ...]) -> tuple[StudentLocationPair, ...]:
+        return tuple(
+            StudentLocationPair(
+                students.get(value.student_id, value.student_id),
+                locations.get(value.location_id, value.location_id),
+            )
+            for value in values
         )
-        for value in values
+
+    def groups(values: tuple[GroupRule, ...]) -> tuple[GroupRule, ...]:
+        return tuple(
+            GroupRule(tuple(students.get(item, item) for item in value.student_ids))
+            for value in values
+        )
+
+    return replace(
+        rules,
+        eligible_locations=preferences(rules.eligible_locations),
+        preferences=preferences(rules.preferences),
+        pinned=pairs(rules.pinned),
+        prohibited=pairs(rules.prohibited),
+        prior_assignments=pairs(rules.prior_assignments),
+        together=groups(rules.together),
+        separate=groups(rules.separate),
+        student_commute_limits=tuple(
+            (students.get(item, item), limit) for item, limit in rules.student_commute_limits
+        ),
     )

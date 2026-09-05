@@ -122,6 +122,7 @@ class _OptimizationDocument(_DocumentModel):
 
 
 class _StudentDraftDocument(_DocumentModel):
+    reference_id: StrictStr | None = None
     key: StrictStr
     name: StrictStr = ""
     id: StrictStr = ""
@@ -130,6 +131,7 @@ class _StudentDraftDocument(_DocumentModel):
 
 
 class _LocationDraftDocument(_DocumentModel):
+    reference_id: StrictStr | None = None
     key: StrictStr
     name: StrictStr = ""
     id: StrictStr = ""
@@ -334,6 +336,7 @@ def _draft_to_document(session: DraftSession) -> dict[str, object]:
         "students": [
             {
                 "key": row.key,
+                "reference_id": row.reference_id,
                 "name": row.name,
                 "id": row.id,
                 "address": row.address,
@@ -344,6 +347,7 @@ def _draft_to_document(session: DraftSession) -> dict[str, object]:
         "locations": [
             {
                 "key": row.key,
+                "reference_id": row.reference_id,
                 "name": row.name,
                 "id": row.id,
                 "capacity": row.capacity,
@@ -395,6 +399,7 @@ def _draft_from_document(value: object) -> DraftSession:
         students=tuple(
             StudentDraft(
                 key=row.key,
+                reference_id=row.reference_id,
                 name=row.name,
                 id=row.id,
                 address=row.address,
@@ -405,6 +410,7 @@ def _draft_from_document(value: object) -> DraftSession:
         locations=tuple(
             LocationDraft(
                 key=row.key,
+                reference_id=row.reference_id,
                 name=row.name,
                 id=row.id,
                 capacity=row.capacity,
